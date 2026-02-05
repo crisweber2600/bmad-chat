@@ -77,10 +77,10 @@ function App() {
     rightPanelCollapsed,
     setRightPanelCollapsed,
     showDashboard,
-    handleSelectChat,
-    handleViewPR,
-    handleGoHome,
-    handleNewChat,
+    handleSelectChat: selectChat,
+    handleViewPR: viewPR,
+    handleGoHome: goHome,
+    handleNewChat: openNewChatDialog,
   } = useUIState()
   
   const { 
@@ -102,581 +102,74 @@ function App() {
     broadcastEvent
   )
 
-  const handleCreateChat = (domain: string, service: string, feature: string, title: string) => {
+  const onCreateChat = (domain: string, service: string, feature: string, title: string) => {
     if (!currentUser) return
     const newChat = createChat(domain, service, feature, title, currentUser.id)
-    handleSelectChat(newChat.id)
+    selectChat(newChat.id)
     toast.success('Chat created')
   }
 
-  const handleSendMessage = async (content: string) => {
-    if (!activeChat || !currentUser) return
-
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      chatId: activeChat,
-      content,
-      role: 'user',
-      timestamp: Date.now(),
-      userId: currentUser.id,
-    }
-
-    setChats((current) =>
-      (current || []).map((chat) =>
-        chat.id === activeChat
-          ? {
-              ...chat,
-              messages: [...chat.messages, userMessage],
-              updatedAt: Date.now(),
-              title: chat.messages.length === 0 ? content.slice(0, 50) : chat.title,
-            }
-          : chat
-      )
-    )
-
-    await broadcastEvent('message_sent', { content: content.slice(0, 50) })
-
-    setIsTyping(true)
-
-    try {
-      const roleGuidance = currentUser.role === 'business' 
-        ? '- Business impact, user benefits, and outcomes\n- Market validation and user needs\n- Clear next actions without technical jargon\n- "Accept for Now" patterns to prevent analysis paralysis' 
-        : '- Implementation details and architecture\n- Non-ambiguous requirements with who/what/success/out-of-scope\n- Technical feasibility and integration points\n- Decision traceability and blast radius'
-      
-      const promptText = `You are BMAD, an intelligent orchestrator for business model architecture design. Your role is to bridge technical and non-technical co-founders by:
-1. Routing technical questions to technical users and business questions to business users
-2. Protecting engineers from ambiguous requirements (Requirements Firewall)
-3. Enforcing commitment hierarchy: Sarah (business) → Market → Users → BMAD validation → Marcus (technical)
-4. Maintaining momentum - projects must always move forward
-
-Current User: ${currentUser.name} (${currentUser.role} role)
-
-User message: ${content}
-
-Based on this conversation, generate:
-1. A helpful response that respects their role and expertise level
-2. Suggested markdown documentation changes in the .bmad/ directory structure (if applicable)
-3. Assessment: Is this question properly routed to this user? (technical questions to technical users, business to business)
-
-For ${currentUser.role} users, focus on:
-${roleGuidance}
-
-Respond in a conversational way that builds momentum. If the conversation suggests documentation updates, mention what files in .bmad/ should be updated.
-
-Format your response as JSON with this structure:
-{
-  "response": "your conversational response here",
-  "suggestedChanges": [
-    {
-      "path": ".bmad/decisions/example-decision.md",
-      "additions": ["# Decision: Example", "**Status:** Pending", "Content here"],
-      "deletions": [],
-      "status": "pending"
-    }
-  ],
-  "routingAssessment": "correctly routed",
-  "momentumIndicator": "high"
-}`
-
-      const response = await window.spark.llm(promptText, 'gpt-4o', true)
-      const parsed = JSON.parse(response)
-
-      if (parsed.routingAssessment && parsed.routingAssessment !== 'correctly routed') {
-        toast.info(`Note: This question might benefit from ${parsed.routingAssessment.replace('needs ', '')}`)
-      }
-
-      const aiMessage: Message = {
-        id: `msg-${Date.now()}-ai`,
-        chatId: activeChat,
-        content: parsed.response,
-        role: 'assistant',
-        timestamp: Date.now(),
-        fileChanges: parsed.suggestedChanges || [],
-      }
-
-      setChats((current) =>
-        (current || []).map((chat) =>
-          chat.id === activeChat
-            ? {
-                ...chat,
-                messages: [...chat.messages, aiMessage],
-                updatedAt: Date.now(),
-              }
-            : chat
-        )
-      )
-
-      if (parsed.suggestedChanges && parsed.suggestedChanges.length > 0) {
-        setPendingChanges((current) => [...(current || []), ...parsed.suggestedChanges])
-        toast.success('Documentation changes suggested')
-      }
-    } catch (error) {
-      toast.error('Failed to get AI response')
-      console.error(error)
-    } finally {
-      setIsTyping(false)
-    }
+  const onCreatePR = (title: string, description: string) => {
+    if (!currentUser || pendingChanges.length === 0) return
+    
+    createPR(title, description, activeChat || '', currentUser, pendingChanges, broadcastEvent)
+    clearChanges()
+    setCreatePRDialogOpen(false)
   }
 
-  const handleCreatePR = (title: string, description: string) => {
-    if (!currentUser || (pendingChanges || []).length === 0) return
-
-    const newPR: PullRequest = {
-      id: `pr-${Date.now()}`,
-      title,
-      description,
-      chatId: activeChat || '',
-      author: currentUser.name,
-      status: 'open',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      fileChanges: (pendingChanges || []).map((change) => ({ ...change, status: 'staged' as const })),
-      comments: [],
-      approvals: [],
-    }
-
-    setPullRequests((current) => [newPR, ...(current || [])])
-    setPendingChanges([])
-    broadcastEvent('pr_created', { prId: newPR.id, title })
-    toast.success('Pull request created')
-  }
-
-  const handleMergePR = (prId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? { ...pr, status: 'merged' as const, updatedAt: Date.now() }
-          : pr
-      )
-    )
+  const onMergePR = (prId: string) => {
+    mergePR(prId, broadcastEvent)
     setPRDialogOpen(false)
-    broadcastEvent('pr_updated', { prId, status: 'merged' })
-    toast.success('Pull request merged successfully')
   }
 
-  const handleClosePR = (prId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? { ...pr, status: 'closed' as const, updatedAt: Date.now() }
-          : pr
-      )
-    )
+  const onClosePR = (prId: string) => {
+    closePR(prId)
     setPRDialogOpen(false)
-    toast.info('Pull request closed')
   }
 
-  const handleApprovePR = (prId: string) => {
+  const onApprovePR = (prId: string) => {
     if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId && !pr.approvals.includes(currentUser.id)
-          ? { ...pr, approvals: [...pr.approvals, currentUser.id], updatedAt: Date.now() }
-          : pr
-      )
-    )
-    toast.success('Pull request approved')
+    approvePR(prId, currentUser.id)
   }
 
-  const handleCommentPR = (prId: string, content: string) => {
+  const onCommentPR = (prId: string, content: string) => {
     if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? {
-              ...pr,
-              comments: [
-                ...pr.comments,
-                {
-                  id: `comment-${Date.now()}`,
-                  prId,
-                  author: currentUser.name,
-                  content,
-                  timestamp: Date.now(),
-                },
-              ],
-              updatedAt: Date.now(),
-            }
-          : pr
-      )
-    )
+    commentOnPR(prId, content, currentUser.name)
   }
 
-  const handleAddLineComment = (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+  const onAddPRLineComment = (
+    prId: string,
+    fileId: string,
+    lineNumber: number,
+    lineType: 'addition' | 'deletion' | 'unchanged',
+    content: string,
+    parentId?: string
+  ) => {
     if (!currentUser) return
-
-    const newComment: LineComment = {
-      id: `line-comment-${Date.now()}`,
-      fileId,
-      lineNumber,
-      lineType,
-      author: currentUser.name,
-      authorAvatar: currentUser.avatarUrl,
-      content,
-      timestamp: Date.now(),
-      resolved: false,
-    }
-
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => {
-            if (file.path !== fileId) return file
-
-            if (parentId) {
-              return {
-                ...file,
-                lineComments: (file.lineComments || []).map((comment) => {
-                  if (comment.id === parentId) {
-                    return {
-                      ...comment,
-                      replies: [...(comment.replies || []), newComment],
-                    }
-                  }
-                  return comment
-                }),
-              }
-            }
-
-            return {
-              ...file,
-              lineComments: [...(file.lineComments || []), newComment],
-            }
-          }),
-          updatedAt: Date.now(),
-        }
-      })
-    )
-
-    toast.success('Comment added')
-    broadcastEvent('pr_updated', { prId, action: 'comment_added' })
+    addPRLineComment(prId, fileId, lineNumber, lineType, content, currentUser, parentId, broadcastEvent)
   }
 
-  const handleResolveLineComment = (prId: string, commentId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => ({
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) =>
-              comment.id === commentId
-                ? { ...comment, resolved: true }
-                : comment
-            ),
-          })),
-          updatedAt: Date.now(),
-        }
-      })
-    )
-
-    toast.success('Comment resolved')
-  }
-
-  const handleAddPendingLineComment = (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+  const onAddPendingLineComment = (
+    fileId: string,
+    lineNumber: number,
+    lineType: 'addition' | 'deletion' | 'unchanged',
+    content: string,
+    parentId?: string
+  ) => {
     if (!currentUser) return
-
-    const newComment: LineComment = {
-      id: `line-comment-${Date.now()}`,
-      fileId,
-      lineNumber,
-      lineType,
-      author: currentUser.name,
-      authorAvatar: currentUser.avatarUrl,
-      content,
-      timestamp: Date.now(),
-      resolved: false,
-    }
-
-    setPendingChanges((current) =>
-      (current || []).map((file) => {
-        if (file.path !== fileId) return file
-
-        if (parentId) {
-          return {
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) => {
-              if (comment.id === parentId) {
-                return {
-                  ...comment,
-                  replies: [...(comment.replies || []), newComment],
-                }
-              }
-              return comment
-            }),
-          }
-        }
-
-        return {
-          ...file,
-          lineComments: [...(file.lineComments || []), newComment],
-        }
-      })
-    )
-
-    toast.success('Comment added')
+    addPendingLineComment(fileId, lineNumber, lineType, content, currentUser, parentId)
   }
 
-  const handleResolvePendingLineComment = (commentId: string) => {
-    setPendingChanges((current) =>
-      (current || []).map((file) => ({
-        ...file,
-        lineComments: (file.lineComments || []).map((comment) =>
-          comment.id === commentId
-            ? { ...comment, resolved: true }
-            : comment
-        ),
-      }))
-    )
-
-    toast.success('Comment resolved')
-  }
-
-  const handleToggleLineCommentReaction = (prId: string, commentId: string, emoji: string) => {
-    if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => ({
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) => {
-              if (comment.id === commentId) {
-                return toggleReactionOnComment(comment, emoji, currentUser)
-              }
-              if (comment.replies) {
-                return {
-                  ...comment,
-                  replies: comment.replies.map((reply) =>
-                    reply.id === commentId
-                      ? toggleReactionOnComment(reply, emoji, currentUser)
-                      : reply
-                  ),
-                }
-              }
-              return comment
-            }),
-          })),
-          updatedAt: Date.now(),
-        }
-      })
-    )
-  }
-
-  const handleTogglePendingLineCommentReaction = (commentId: string, emoji: string) => {
-    if (!currentUser) return
-
-    setPendingChanges((current) =>
-      (current || []).map((file) => ({
-        ...file,
-        lineComments: (file.lineComments || []).map((comment) => {
-          if (comment.id === commentId) {
-            return toggleReactionOnComment(comment, emoji, currentUser)
-          }
-          if (comment.replies) {
-            return {
-              ...comment,
-              replies: comment.replies.map((reply) =>
-                reply.id === commentId
-                  ? toggleReactionOnComment(reply, emoji, currentUser)
-                  : reply
-              ),
-            }
-          }
-          return comment
-        }),
-      }))
-    )
-  }
-
-  const handleTranslateMessage = async (messageId: string) => {
-    if (!currentUser || !activeChat) return
-
-    const chat = (chats || []).find((c) => c.id === activeChat)
-    if (!chat) return
-
-    const message = chat.messages.find((m) => m.id === messageId)
-    if (!message) return
-
-    if (message.translations?.find((t) => t.role === currentUser.role)) {
-      toast.info('Message already translated for your role')
-      return
-    }
-
-    try {
-      const roleDescription = currentUser.role === 'business'
-        ? 'a business user who needs plain language explanations without technical jargon'
-        : 'a technical user who needs detailed implementation specifics and technical accuracy'
-
-      const promptText = `You are a translator that helps ${roleDescription} understand documentation and technical content.
-
-Analyze the following text and identify segments that need explanation for a ${currentUser.role} user:
-
-"${message.content}"
-
-For each technical term, API reference, code snippet, or jargon that needs explanation:
-1. Identify the exact text that needs clarification
-2. Provide a clear explanation appropriate for a ${currentUser.role} user
-3. Give context about why it matters in the larger project
-
-${currentUser.role === 'business' 
-  ? 'Focus on business impact, user benefits, and outcomes. Avoid technical implementation details.' 
-  : 'Focus on implementation details, APIs, architecture, and technical specifications.'}
-
-Return a JSON object with this exact structure:
-{
-  "segments": [
-    {
-      "originalText": "the exact text from the message that needs explanation",
-      "startIndex": 0,
-      "endIndex": 10,
-      "explanation": "clear explanation for ${currentUser.role} user",
-      "context": "why this matters in the project",
-      "simplifiedText": "optional simplified version (only if significantly clearer)"
-    }
-  ]
-}
-
-Important: 
-- startIndex and endIndex must match the exact position in the original text
-- Only include segments that genuinely need explanation for a ${currentUser.role} user
-- If nothing needs explanation, return an empty segments array`
-
-      const response = await window.spark.llm(promptText, 'gpt-4o', true)
-      const parsed = JSON.parse(response)
-
-      setChats((current) =>
-        (current || []).map((chat) =>
-          chat.id === activeChat
-            ? {
-                ...chat,
-                messages: chat.messages.map((msg) =>
-                  msg.id === messageId
-                    ? {
-                        ...msg,
-                        translations: [
-                          ...(msg.translations || []),
-                          {
-                            role: currentUser.role,
-                            segments: parsed.segments || [],
-                          },
-                        ],
-                      }
-                    : msg
-                ),
-                updatedAt: Date.now(),
-              }
-            : chat
-        )
-      )
-
-      if (parsed.segments && parsed.segments.length > 0) {
-        toast.success(`Translated ${parsed.segments.length} term${parsed.segments.length > 1 ? 's' : ''} for ${currentUser.role} context`)
-      } else {
-        toast.info('No terms needed translation')
-      }
-    } catch (error) {
-      toast.error('Failed to translate message')
-      console.error(error)
-    }
-  }
-
-  const toggleReactionOnComment = (comment: LineComment, emoji: string, user: User): LineComment => {
-    const reactions = comment.reactions || []
-    const existingReaction = reactions.find((r) => r.emoji === emoji)
-
-    if (existingReaction) {
-      const hasReacted = existingReaction.userIds.includes(user.id)
-      if (hasReacted) {
-        const updatedUserIds = existingReaction.userIds.filter((id) => id !== user.id)
-        const updatedUserNames = existingReaction.userNames.filter((name) => name !== user.name)
-        
-        if (updatedUserIds.length === 0) {
-          return {
-            ...comment,
-            reactions: reactions.filter((r) => r.emoji !== emoji),
-          }
-        }
-        
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? { ...r, userIds: updatedUserIds, userNames: updatedUserNames }
-              : r
-          ),
-        }
-      } else {
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? {
-                  ...r,
-                  userIds: [...r.userIds, user.id],
-                  userNames: [...r.userNames, user.name],
-                }
-              : r
-          ),
-        }
-      }
-    } else {
-      return {
-        ...comment,
-        reactions: [
-          ...reactions,
-          {
-            emoji,
-            userIds: [user.id],
-            userNames: [user.name],
-          },
-        ],
-      }
-    }
-  }
-
-  const activeChatData = (chats || []).find((c) => c.id === activeChat)
-  const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
-  const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
-  const organization = getExistingOrganization()
-
-  const handleSelectChat = (chatId: string) => {
-    setActiveChat(chatId)
-    setShowDashboard(false)
-    if (isMobile) {
-      setChatListOpen(false)
-    }
-  }
-
-  const handleViewPR = (pr: PullRequest) => {
-    setSelectedPR(pr)
-    setPRDialogOpen(true)
-    setShowDashboard(false)
-    if (isMobile) {
-      setRightPanelOpen(false)
-    }
-  }
-
-  const handleGoHome = () => {
-    setActiveChat(null)
-    setShowDashboard(true)
-  }
+  const activeChatData = getChatById(activeChat)
+  const openPRs = getOpenPRs()
+  const mergedPRs = getMergedPRs()
+  const organization = getOrganization()
 
   if (isLoadingAuth) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <div className="text-2xl font-bold mb-2">BMAD</div>
+          <div className="text-2xl font-bold mb-2">{APP_CONSTANTS.TITLE}</div>
           <div className="text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -702,10 +195,10 @@ Important:
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-[85vw] max-w-sm">
                 <ChatList
-                  chats={chats || []}
+                  chats={chats}
                   activeChat={activeChat}
-                  onSelectChat={handleSelectChat}
-                  onNewChat={handleNewChat}
+                  onSelectChat={selectChat}
+                  onNewChat={openNewChatDialog}
                 />
               </SheetContent>
             </Sheet>
@@ -721,14 +214,14 @@ Important:
           <Button
             variant="ghost"
             size="icon"
-            onClick={handleGoHome}
+            onClick={goHome}
             title="Dashboard"
           >
             <House size={20} weight="bold" />
           </Button>
-          <h1 className="text-lg md:text-2xl font-bold tracking-tight">BMAD</h1>
+          <h1 className="text-lg md:text-2xl font-bold tracking-tight">{APP_CONSTANTS.TITLE}</h1>
           <Badge variant="outline" className="hidden md:inline-flex text-xs">
-            Momentum-First Platform
+            {APP_CONSTANTS.SUBTITLE}
           </Badge>
         </div>
         
@@ -777,10 +270,10 @@ Important:
           <div className={`${chatListOpen ? 'w-80' : 'w-0'} transition-all duration-300`}>
             {chatListOpen && (
               <ChatList
-                chats={chats || []}
+                chats={chats}
                 activeChat={activeChat}
-                onSelectChat={setActiveChat}
-                onNewChat={handleNewChat}
+                onSelectChat={selectChat}
+                onNewChat={openNewChatDialog}
               />
             )}
           </div>
@@ -790,12 +283,12 @@ Important:
           {showDashboard ? (
             <ScrollArea className="flex-1">
               <MomentumDashboard
-                chats={chats || []}
-                pullRequests={pullRequests || []}
+                chats={chats}
+                pullRequests={pullRequests}
                 currentUser={currentUser!}
-                onNewChat={handleNewChat}
-                onSelectChat={handleSelectChat}
-                onViewPR={handleViewPR}
+                onNewChat={openNewChatDialog}
+                onSelectChat={selectChat}
+                onViewPR={viewPR}
               />
             </ScrollArea>
           ) : activeChatData ? (
@@ -806,8 +299,8 @@ Important:
                     <ChatMessage
                       key={message.id}
                       message={message}
-                      user={currentUser || undefined}
-                      onTranslate={handleTranslateMessage}
+                      user={currentUser}
+                      onTranslate={(messageId) => handleTranslateMessage(messageId, message.content)}
                     />
                   ))}
                   {typingUsers.length > 0 && (
@@ -828,7 +321,7 @@ Important:
               </ScrollArea>
               <ChatInput
                 onSend={handleSendMessage}
-                onTypingChange={setTyping}
+                onTypingChange={handleTypingChange}
                 disabled={isTyping}
                 placeholder="Type your message..."
               />
@@ -836,9 +329,9 @@ Important:
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground px-4">
               <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">Welcome to BMAD</h2>
+                <h2 className="text-xl font-semibold mb-2">Welcome to {APP_CONSTANTS.TITLE}</h2>
                 <p className="text-sm mb-4">Select a chat or start a new conversation</p>
-                <Button onClick={handleGoHome} variant="outline">
+                <Button onClick={goHome} variant="outline">
                   <House size={18} className="mr-2" />
                   Go to Dashboard
                 </Button>
@@ -863,9 +356,9 @@ Important:
                   <TabsList className="w-full rounded-none border-b">
                     <TabsTrigger value="changes" className="flex-1">
                       Changes
-                      {(pendingChanges || []).length > 0 && (
+                      {pendingChanges.length > 0 && (
                         <Badge variant="secondary" className="ml-2">
-                          {(pendingChanges || []).length}
+                          {pendingChanges.length}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -890,15 +383,15 @@ Important:
                         <div>
                           <h3 className="font-semibold mb-3">Pending Changes</h3>
                           <FileDiffViewer 
-                            fileChanges={pendingChanges || []}
-                            onAddLineComment={handleAddPendingLineComment}
-                            onResolveComment={handleResolvePendingLineComment}
-                            onToggleReaction={handleTogglePendingLineCommentReaction}
+                            fileChanges={pendingChanges}
+                            onAddLineComment={onAddPendingLineComment}
+                            onResolveComment={resolvePendingLineComment}
+                            onToggleReaction={togglePendingLineCommentReaction}
                             currentUser={currentUser}
                           />
                         </div>
                         
-                        {(pendingChanges || []).length > 0 && (
+                        {pendingChanges.length > 0 && (
                           <Button
                             onClick={() => setCreatePRDialogOpen(true)}
                             className="w-full"
@@ -922,7 +415,7 @@ Important:
                                 <PRCard
                                   key={pr.id}
                                   pr={pr}
-                                  onView={() => handleViewPR(pr)}
+                                  onView={() => viewPR(pr)}
                                 />
                               ))}
                             </div>
@@ -939,7 +432,7 @@ Important:
                                   <PRCard
                                     key={pr.id}
                                     pr={pr}
-                                    onView={() => handleViewPR(pr)}
+                                    onView={() => viewPR(pr)}
                                   />
                                 ))}
                               </div>
@@ -947,7 +440,7 @@ Important:
                           </>
                         )}
 
-                        {(pullRequests || []).length === 0 && (
+                        {pullRequests.length === 0 && (
                           <div className="text-center py-8 text-muted-foreground text-sm">
                             No pull requests yet
                           </div>
@@ -982,9 +475,9 @@ Important:
                 >
                   <CaretLeft size={20} weight="bold" />
                 </Button>
-                {(pendingChanges || []).length > 0 && (
+                {pendingChanges.length > 0 && (
                   <Badge variant="secondary" className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs">
-                    {(pendingChanges || []).length}
+                    {pendingChanges.length}
                   </Badge>
                 )}
                 {openPRs.length > 0 && (
@@ -999,9 +492,9 @@ Important:
                   <TabsList className="flex-1 rounded-none border-0 h-auto">
                     <TabsTrigger value="changes" className="flex-1">
                       Changes
-                      {(pendingChanges || []).length > 0 && (
+                      {pendingChanges.length > 0 && (
                         <Badge variant="secondary" className="ml-2">
-                          {(pendingChanges || []).length}
+                          {pendingChanges.length}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -1036,15 +529,15 @@ Important:
                     <div>
                       <h3 className="font-semibold mb-3">Pending Changes</h3>
                       <FileDiffViewer 
-                        fileChanges={pendingChanges || []}
-                        onAddLineComment={handleAddPendingLineComment}
-                        onResolveComment={handleResolvePendingLineComment}
-                        onToggleReaction={handleTogglePendingLineCommentReaction}
+                        fileChanges={pendingChanges}
+                        onAddLineComment={onAddPendingLineComment}
+                        onResolveComment={resolvePendingLineComment}
+                        onToggleReaction={togglePendingLineCommentReaction}
                         currentUser={currentUser}
                       />
                     </div>
                     
-                    {(pendingChanges || []).length > 0 && (
+                    {pendingChanges.length > 0 && (
                       <Button
                         onClick={() => setCreatePRDialogOpen(true)}
                         className="w-full"
@@ -1068,7 +561,7 @@ Important:
                             <PRCard
                               key={pr.id}
                               pr={pr}
-                              onView={() => handleViewPR(pr)}
+                              onView={() => viewPR(pr)}
                             />
                           ))}
                         </div>
@@ -1085,7 +578,7 @@ Important:
                               <PRCard
                                 key={pr.id}
                                 pr={pr}
-                                onView={() => handleViewPR(pr)}
+                                onView={() => viewPR(pr)}
                               />
                             ))}
                           </div>
@@ -1093,7 +586,7 @@ Important:
                       </>
                     )}
 
-                    {(pullRequests || []).length === 0 && (
+                    {pullRequests.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground text-sm">
                         No pull requests yet
                       </div>
@@ -1122,27 +615,27 @@ Important:
         pr={selectedPR}
         open={prDialogOpen}
         onClose={() => setPRDialogOpen(false)}
-        onMerge={handleMergePR}
-        onClosePR={handleClosePR}
-        onApprove={handleApprovePR}
-        onComment={handleCommentPR}
+        onMerge={onMergePR}
+        onClosePR={onClosePR}
+        onApprove={onApprovePR}
+        onComment={onCommentPR}
         currentUser={currentUser}
-        onAddLineComment={handleAddLineComment}
-        onResolveLineComment={handleResolveLineComment}
-        onToggleReaction={handleToggleLineCommentReaction}
+        onAddLineComment={onAddPRLineComment}
+        onResolveLineComment={resolvePRLineComment}
+        onToggleReaction={togglePRLineCommentReaction}
       />
 
       <CreatePRDialog
         open={createPRDialogOpen}
         onClose={() => setCreatePRDialogOpen(false)}
-        onCreate={handleCreatePR}
-        fileChanges={pendingChanges || []}
+        onCreate={onCreatePR}
+        fileChanges={pendingChanges}
       />
 
       <NewChatDialog
         open={newChatDialogOpen}
         onClose={() => setNewChatDialogOpen(false)}
-        onCreate={handleCreateChat}
+        onCreate={onCreateChat}
         existingDomains={organization.domains}
         existingServices={organization.services}
         existingFeatures={organization.features}
