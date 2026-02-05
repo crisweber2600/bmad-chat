@@ -1,23 +1,59 @@
-# ✨ Welcome to Your Spark Template!
-You've just launched your brand-new Spark Template Codespace — everything’s fired up and ready for you to explore, build, and create with Spark!
+# BMAD - Business Model Architecture Design Platform
 
-This template is your blank canvas. It comes with a minimal setup to help you get started quickly with Spark development.
+An intelligent collaboration ecosystem where AI orchestrates async decision-making between non-technical co-founders (Sarah) and technical co-founders (Marcus).
 
-🚀 What's Inside?
-- A clean, minimal Spark environment
-- Pre-configured for local development
-- Ready to scale with your ideas
-  
-🧠 What Can You Do?
+## 🎯 Core Philosophy
 
-Right now, this is just a starting point — the perfect place to begin building and testing your Spark applications.
+**7 Architectural Principles:**
+1. **Friction ∝ Stakes** - Small decisions flow fast. Big decisions get ceremony.
+2. **Everyone Has a Home** - Sarah: Web UI. Marcus: Git + CLI. Both: Async-first.
+3. **AI Amplifies, Humans Decide** - AI proposes, translates, detects. Humans have final say.
+4. **Async by Default, Sync by Exception** - Most work async. Sync for alignment + ceremonies.
+5. **Momentum is Sacred** - Projects must always be able to move forward.
+6. **Transparency > Permission** - Everyone sees everything. Action requires appropriate role.
+7. **Every Decision is Traceable** - Who, what, when, when, why - always answerable.
 
-🧹 Just Exploring?
-No problem! If you were just checking things out and don’t need to keep this code:
+## 🚀 Key Features
 
-- Simply delete your Spark.
-- Everything will be cleaned up — no traces left behind.
+- **Momentum-First Dashboard** - Shows trajectory, velocity, and next action
+- **Intelligent Question Routing** - Technical questions to technical users, business to business
+- **Commitment Hierarchy** - Engineers commit last on validated requirements
+- **Role-Based Translation** - AI adapts content for business or technical context
+- **Git-Based Requirements** - `.bmad/` directory structure as living specification
+- **Real-Time Collaboration** - Presence awareness, typing indicators, activity feed
+- **Integrated PR Workflow** - Complete review process within the app
 
-📄 License For Spark Template Resources 
+## 🏗️ .bmad/ Directory Structure
+
+```
+.bmad/
+├── config.yaml          # Project configuration
+├── status.yaml          # Current status and milestones
+├── decisions/           # Approved decisions
+├── pending/             # Awaiting review
+└── history/             # Decision evolution
+```
+
+## 🎨 Tech Stack
+
+- React + TypeScript
+- Spark Runtime (AI, KV Storage, User Auth)
+- Tailwind CSS + shadcn/ui
+- Framer Motion
+- Space Grotesk + JetBrains Mono fonts
+
+## 🌟 Getting Started
+
+1. Sign up and select your role: Business Co-Founder (Sarah) or Technical Co-Founder (Marcus)
+2. Start your first decision thread organized by Domain → Service → Feature
+3. Let BMAD guide conversations and maintain project momentum
+4. Review suggested changes and create PRs when decisions crystallize
+5. Watch your project velocity on the momentum dashboard
+
+---
+
+Built with momentum in mind. Projects never stall.
+
+## 📄 License
 
 The Spark Template files and resources from GitHub are licensed under the terms of the MIT license, Copyright GitHub, Inc.

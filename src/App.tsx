@@ -3,6 +3,7 @@ import { useKV } from '@github/spark/hooks'
 import { Chat, Message, PullRequest, User, FileChange, LineComment, UserRole } from '@/lib/types'
 import { useCollaboration } from '@/hooks/use-collaboration'
 import { AuthForm } from '@/components/AuthForm'
+import { MomentumDashboard } from '@/components/MomentumDashboard'
 import { NewChatDialog } from '@/components/NewChatDialog'
 import { ChatList } from '@/components/ChatList'
 import { ChatMessage } from '@/components/ChatMessage'
@@ -22,7 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine, SignOut } from '@phosphor-icons/react'
+import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine, SignOut, House } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { signUp, signIn, setCurrentUser as saveCurrentUser, getCurrentUser, signOut } from '@/lib/auth'
@@ -43,6 +44,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false)
   const [chatListOpen, setChatListOpen] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
+  const [showDashboard, setShowDashboard] = useState(true)
 
   const { 
     activeUsers, 
@@ -198,32 +200,51 @@ function App() {
     setIsTyping(true)
 
     try {
-      const promptText = `You are a helpful AI assistant in a collaborative documentation platform. 
-The user is a ${currentUser.role} user working on documentation.
+      const roleGuidance = currentUser.role === 'business' 
+        ? '- Business impact, user benefits, and outcomes\n- Market validation and user needs\n- Clear next actions without technical jargon\n- "Accept for Now" patterns to prevent analysis paralysis' 
+        : '- Implementation details and architecture\n- Non-ambiguous requirements with who/what/success/out-of-scope\n- Technical feasibility and integration points\n- Decision traceability and blast radius'
+      
+      const promptText = `You are BMAD, an intelligent orchestrator for business model architecture design. Your role is to bridge technical and non-technical co-founders by:
+1. Routing technical questions to technical users and business questions to business users
+2. Protecting engineers from ambiguous requirements (Requirements Firewall)
+3. Enforcing commitment hierarchy: Sarah (business) → Market → Users → BMAD validation → Marcus (technical)
+4. Maintaining momentum - projects must always move forward
+
+Current User: ${currentUser.name} (${currentUser.role} role)
 
 User message: ${content}
 
 Based on this conversation, generate:
-1. A helpful response to the user
-2. Suggested markdown documentation changes (if applicable)
+1. A helpful response that respects their role and expertise level
+2. Suggested markdown documentation changes in the .bmad/ directory structure (if applicable)
+3. Assessment: Is this question properly routed to this user? (technical questions to technical users, business to business)
 
-Respond in a conversational way. If the conversation suggests documentation updates, mention what files should be updated.
+For ${currentUser.role} users, focus on:
+${roleGuidance}
+
+Respond in a conversational way that builds momentum. If the conversation suggests documentation updates, mention what files in .bmad/ should be updated.
 
 Format your response as JSON with this structure:
 {
   "response": "your conversational response here",
   "suggestedChanges": [
     {
-      "path": "docs/example.md",
-      "additions": ["# New Section", "Content here"],
-      "deletions": ["# Old Section"],
+      "path": ".bmad/decisions/example-decision.md",
+      "additions": ["# Decision: Example", "**Status:** Pending", "Content here"],
+      "deletions": [],
       "status": "pending"
     }
-  ]
+  ],
+  "routingAssessment": "correctly routed",
+  "momentumIndicator": "high"
 }`
 
       const response = await window.spark.llm(promptText, 'gpt-4o', true)
       const parsed = JSON.parse(response)
+
+      if (parsed.routingAssessment && parsed.routingAssessment !== 'correctly routed') {
+        toast.info(`Note: This question might benefit from ${parsed.routingAssessment.replace('needs ', '')}`)
+      }
 
       const aiMessage: Message = {
         id: `msg-${Date.now()}-ai`,
@@ -692,6 +713,7 @@ Important:
 
   const handleSelectChat = (chatId: string) => {
     setActiveChat(chatId)
+    setShowDashboard(false)
     if (isMobile) {
       setChatListOpen(false)
     }
@@ -700,16 +722,22 @@ Important:
   const handleViewPR = (pr: PullRequest) => {
     setSelectedPR(pr)
     setPRDialogOpen(true)
+    setShowDashboard(false)
     if (isMobile) {
       setRightPanelOpen(false)
     }
+  }
+
+  const handleGoHome = () => {
+    setActiveChat(null)
+    setShowDashboard(true)
   }
 
   if (isLoadingAuth) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <div className="text-2xl font-bold mb-2">DocFlow</div>
+          <div className="text-2xl font-bold mb-2">BMAD</div>
           <div className="text-muted-foreground">Loading...</div>
         </div>
       </div>
@@ -751,7 +779,18 @@ Important:
               <List size={20} weight="bold" />
             </Button>
           )}
-          <h1 className="text-lg md:text-2xl font-bold tracking-tight">DocFlow</h1>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleGoHome}
+            title="Dashboard"
+          >
+            <House size={20} weight="bold" />
+          </Button>
+          <h1 className="text-lg md:text-2xl font-bold tracking-tight">BMAD</h1>
+          <Badge variant="outline" className="hidden md:inline-flex text-xs">
+            Momentum-First Platform
+          </Badge>
         </div>
         
         <div className="flex items-center gap-3 md:gap-4">
@@ -809,7 +848,18 @@ Important:
         )}
 
         <div className="flex-1 flex flex-col min-w-0">
-          {activeChatData ? (
+          {showDashboard ? (
+            <ScrollArea className="flex-1">
+              <MomentumDashboard
+                chats={chats || []}
+                pullRequests={pullRequests || []}
+                currentUser={currentUser!}
+                onNewChat={handleNewChat}
+                onSelectChat={handleSelectChat}
+                onViewPR={handleViewPR}
+              />
+            </ScrollArea>
+          ) : activeChatData ? (
             <>
               <ScrollArea className="flex-1 p-3 md:p-6">
                 <div className="max-w-4xl mx-auto">
@@ -847,8 +897,12 @@ Important:
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground px-4">
               <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">Welcome to DocFlow</h2>
-                <p className="text-sm">Select a chat or start a new conversation</p>
+                <h2 className="text-xl font-semibold mb-2">Welcome to BMAD</h2>
+                <p className="text-sm mb-4">Select a chat or start a new conversation</p>
+                <Button onClick={handleGoHome} variant="outline">
+                  <House size={18} className="mr-2" />
+                  Go to Dashboard
+                </Button>
               </div>
             </div>
           )}

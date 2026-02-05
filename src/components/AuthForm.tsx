@@ -46,8 +46,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center space-y-2">
-          <CardTitle className="text-3xl font-bold">DocFlow</CardTitle>
-          <CardDescription>Collaborative Documentation Platform</CardDescription>
+          <CardTitle className="text-3xl font-bold">BMAD</CardTitle>
+          <CardDescription>Business Model Architecture Design Platform</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
@@ -143,15 +143,15 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <Label>Role</Label>
+                  <Label>Your Role</Label>
                   <RadioGroup value={signUpRole} onValueChange={(value) => setSignUpRole(value as UserRole)}>
                     <div className="flex items-center space-x-3 border rounded-lg p-3 hover:bg-accent/50 transition-colors cursor-pointer">
                       <RadioGroupItem value="business" id="role-business" />
                       <Label htmlFor="role-business" className="flex items-center gap-2 cursor-pointer flex-1">
                         <Briefcase size={18} className="text-primary" />
                         <div>
-                          <div className="font-medium">Business</div>
-                          <div className="text-xs text-muted-foreground">Focus on outcomes and impact</div>
+                          <div className="font-medium">Business Co-Founder (Sarah)</div>
+                          <div className="text-xs text-muted-foreground">Market validation, user needs, business impact</div>
                         </div>
                       </Label>
                     </div>
@@ -160,8 +160,8 @@ export function AuthForm({ onSignIn, onSignUp }: AuthFormProps) {
                       <Label htmlFor="role-technical" className="flex items-center gap-2 cursor-pointer flex-1">
                         <UserGear size={18} className="text-primary" />
                         <div>
-                          <div className="font-medium">Technical</div>
-                          <div className="text-xs text-muted-foreground">Focus on implementation details</div>
+                          <div className="font-medium">Technical Co-Founder (Marcus)</div>
+                          <div className="text-xs text-muted-foreground">Architecture, implementation, technical feasibility</div>
                         </div>
                       </Label>
                     </div>

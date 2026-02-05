@@ -71,9 +71,9 @@ export function NewChatDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>New Chat</DialogTitle>
+            <DialogTitle>New Decision Thread</DialogTitle>
             <DialogDescription>
-              Organize your chat by Domain, Service, and Feature
+              Organize your decisions by Domain, Service, and Feature to maintain clarity
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -153,10 +153,10 @@ export function NewChatDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="title">Chat Title</Label>
+              <Label htmlFor="title">Decision Title</Label>
               <Input
                 id="title"
-                placeholder="Enter chat title..."
+                placeholder="e.g., 'Define user authentication strategy'"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -167,7 +167,7 @@ export function NewChatDialog({
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit">Create Chat</Button>
+            <Button type="submit">Start Conversation</Button>
           </DialogFooter>
         </form>
       </DialogContent>

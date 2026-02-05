@@ -1,16 +1,50 @@
 # Planning Guide
 
-A collaborative chat platform that bridges technical and business stakeholders through AI-assisted conversations, automatically generating markdown documentation and managing pull request workflows entirely within the application interface. Users authenticate with secure credentials and organize conversations hierarchically by Domain, Service, and Feature.
+BMAD-as-a-Service: An intelligent collaboration ecosystem where AI orchestrates async decision-making between non-technical co-founders (Sarah) and technical co-founders (Marcus), meeting each in their native habitat while ensuring projects never stall. The platform enforces momentum-first workflows with proportional ceremony, intelligent question routing based on expertise, and commitment hierarchy where engineers commit last, not first.
 
 **Experience Qualities**: 
-1. **Conversational** - The interface should feel like a natural dialogue, removing technical barriers between business and technical users through intuitive chat interactions.
-2. **Transparent** - Every change to documentation is visible and traceable, with clear PR workflows that demystify the review process for non-technical users.
-3. **Efficient** - Rapid iteration cycles where conversations immediately generate actionable documentation changes, eliminating context-switching between tools.
+1. **Momentum-First** - Projects can always move forward. Async by default with AI-triggered sync, provisional commits with timeouts, and cross-pollination when queues are empty ensure zero stalling.
+2. **Proportionally Ceremonial** - Friction matches stakes. Small decisions flow fast with AI defaults, big decisions (architecture locks, pivots) get sync ceremonies with dual approval.
+3. **Transparently Intelligent** - Every decision is traceable with blast radius visibility. AI orchestrates routing, detects deadlocks, suggests sync moments, but humans retain final authority.
 
 **Complexity Level**: Complex Application (advanced functionality, likely with multiple views)
-This application requires sophisticated state management across multiple chat sessions, real-time AI integration, file change tracking, PR workflow management, role-based user experiences, authentication system, and hierarchical chat organization - all of which constitute an advanced multi-view application.
+This application requires intelligent question routing, momentum tracking, role-based async workflows, AI orchestration layer, Git integration for requirements storage, blast radius detection, cross-domain collaboration, structured sync protocols, and ecosystem health monitoring - all of which constitute an advanced multi-role application with sophisticated AI coordination.
+
+## Core Architectural Principles
+
+1. **Friction ∝ Stakes** - Small decisions flow fast. Big decisions get ceremony.
+2. **Everyone Has a Home** - Sarah: Web UI. Marcus: Git + CLI. Both: Teams.
+3. **AI Amplifies, Humans Decide** - AI proposes, translates, detects. Humans have final say.
+4. **Async by Default, Sync by Exception** - Most work async. Sync for alignment + ceremonies.
+5. **Momentum is Sacred** - Projects must always be able to move forward.
+6. **Transparency > Permission** - Everyone sees everything. Action requires appropriate role.
+7. **Every Decision is Traceable** - Who, what, when, why - always answerable.
 
 ## Essential Features
+
+### Momentum-First Dashboard
+- **Functionality**: Landing page shows project trajectory, velocity indicators, next action items, and decision queue status with progress narrative
+- **Purpose**: Sarah's #1 need - clarity on "what's going on" and "what's next" without technical complexity
+- **Trigger**: User logs in or navigates to home
+- **Progression**: User opens app → Dashboard displays project state as human-readable story → Shows momentum indicators (decisions/day, stall frequency) → Highlights next action with "Accept for Now" pattern → Offers: Continue, Skip, Get Help, AI Suggest → Never presents dead-ends
+- **Success criteria**: State loads under 1 second, narrative is human-readable, momentum metrics display correctly, next action is always available, anti-stall guarantee enforced
+- **Backend Integration**: ✅ Uses window.spark.kv for decision history, velocity calculations, AI generates narrative from recent activity
+
+### Intelligent Question Routing
+- **Functionality**: AI analyzes questions and routes to appropriate role (technical to Marcus, business to Sarah) with cross-pollination when queues empty
+- **Purpose**: Meet users in their expertise domain, prevent context-switching, enable cross-domain contribution during idle time
+- **Trigger**: New decision/question created, or user queue becomes empty/blocked
+- **Progression**: Question created → AI analyzes context/complexity → Routes to appropriate queue → User works their queue → Queue empty/blocked → System offers cross-pollination: "Help with a business question while you wait?" → User accepts → Question appears with full context translation → Contribution recorded
+- **Success criteria**: Technical questions reach technical users, business questions reach business users, routing accuracy >85%, cross-pollination increases utilization, users feel questions are relevant
+- **Backend Integration**: ✅ Uses window.spark.llm for content analysis, routing logic based on user role and question type, queue state tracking in window.spark.kv
+
+### Commitment Hierarchy
+- **Functionality**: Enforces Sarah → Market → Users → BMAD validation → Marcus flow where engineers commit last on validated requirements
+- **Purpose**: Requirements firewall protecting engineers from ambiguous goals, scope churn, and mid-flight pivots
+- **Trigger**: Decision moves through workflow stages
+- **Progression**: Sarah proposes → AI validates against market/users → BMAD checks alignment → Creates requirement PR → Marcus reviews non-ambiguous spec → Approves/Overrides → Work begins on stable foundation
+- **Success criteria**: No engineering work starts on unvalidated requirements, all specs include who/what/success/out-of-scope, engineers can trace decision provenance, rework reduced by >50%
+- **Backend Integration**: ✅ Workflow state machine in window.spark.kv, AI validation via window.spark.llm, Git storage in .bmad/ directory structure
 
 ### User Authentication System
 - **Functionality**: Secure sign-up and sign-in flows with email/password authentication, role selection during registration, and persistent session management
@@ -44,12 +78,18 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: Role badge displays clearly, interface elements adjust based on role, suggestions are contextually appropriate, role persists across sessions, visible in user profile
 - **Backend Integration**: ✅ Role stored in AuthUser type in window.spark.kv, role badge displays in app header, affects AI prompt generation for translations
 
-### Markdown File Change Tracking
-- **Functionality**: Backend automatically generates/modifies markdown files based on chat conversations, displaying diffs in the UI
-- **Purpose**: Transform conversational insights into structured documentation without manual file editing
+### Markdown File Change Tracking (.bmad/ Directory Structure)
+- **Functionality**: Backend automatically generates/modifies markdown files in the .bmad/ directory based on chat conversations, displaying diffs in the UI. The .bmad/ directory serves as a living specification with structured decision tracking.
+- **Purpose**: Transform conversational insights into structured documentation without manual file editing. Git becomes the requirements database with .bmad/ making spec = repo.
 - **Trigger**: AI response contains actionable documentation updates
-- **Progression**: Chat message sent → AI analyzes → Determines documentation impact → Generates markdown changes → Shows diff in sidebar → User can preview/edit → Changes staged for PR
-- **Success criteria**: File changes are accurate representations of conversation, diffs are clearly visible, multiple files can be changed in one conversation
+- **Progression**: Chat message sent → AI analyzes → Determines documentation impact → Generates markdown changes in .bmad/ structure → Shows diff in sidebar → User can preview/edit → Changes staged for PR
+- **Success criteria**: File changes are accurate representations of conversation, diffs are clearly visible, multiple files can be changed in one conversation, .bmad/ directory maintains clear structure
+- **Directory Structure**:
+  - `.bmad/config.yaml` - Project configuration and metadata
+  - `.bmad/status.yaml` - Current project status and milestone tracking
+  - `.bmad/decisions/` - Approved architectural and business decisions
+  - `.bmad/pending/` - Decisions awaiting review and approval
+  - `.bmad/history/` - Archived decisions and decision evolution
 
 ### Integrated Pull Request Workflow
 - **Functionality**: Complete PR creation, review, and merge process within the app interface with comprehensive file preview capabilities
@@ -101,7 +141,10 @@ This application requires sophisticated state management across multiple chat se
 - **AI Service Outage**: Display graceful error messages, queue messages for retry, allow manual markdown editing as fallback
 - **Large Markdown Files**: Implement pagination/lazy loading for diffs, show summary of changes before full diff
 - **Network Interruptions**: Optimistic UI updates with retry logic, clearly indicate pending/failed messages, presence system auto-recovers on reconnection
-- **Empty States**: Welcoming onboarding for first chat, helpful prompts when no PRs exist, clear guidance for new users, empty activity feed shows "No recent activity"
+- **Empty States**: Dashboard shows welcoming onboarding for first-time users with clear next actions, momentum metrics show zero state gracefully, empty queues trigger cross-pollination suggestions
+- **Stalled Projects**: Dashboard detects low velocity (<0.5 decisions/hour for 48h) and offers intervention: "Get Help", "Schedule Sync", or "AI Suggest Next Steps"
+- **Routing Errors**: When question is misrouted (technical to business or vice versa), show gentle notification suggesting appropriate collaborator
+- **Queue Blocking**: When user's queue is blocked (awaiting dependencies), automatically surface cross-pollination opportunities from other domain
 - **Permission Issues**: Graceful handling when user lacks merge permissions, request access flows
 - **Stale Presence Data**: Automatic cleanup of user presence after 30 seconds of inactivity to prevent ghost users in collaboration indicators
 - **Race Conditions**: Proper state management using functional updates to prevent data loss when multiple events occur simultaneously
@@ -114,7 +157,7 @@ This application requires sophisticated state management across multiple chat se
 
 ## Design Direction
 
-The design should evoke **confidence and clarity** - a professional workspace that feels equally comfortable for developers and business stakeholders. The interface should communicate that complex processes (AI, Git, PRs) are happening behind the scenes, but the experience remains approachable and human-centered. Visual hierarchy should clearly separate conversation from documentation changes, making the "what's being discussed" versus "what's being changed" distinction immediately obvious.
+The design should evoke **momentum and confidence** - a professional workspace optimized for forward motion where projects never stall. The interface communicates progress as a living narrative, with velocity indicators and next-action clarity front and center. Visual hierarchy emphasizes trajectory over static state: "Where are we going?" trumps "Where are we?". The dashboard feels like a mission control center - not overwhelming with data, but crystal clear on current momentum, next action, and project health. Complex AI orchestration, intelligent routing, and Git integration happen invisibly, surfacing only as helpful nudges and routing suggestions. The experience should feel like having a smart project manager who knows exactly what you need to focus on next.
 
 ## Color Selection
 
@@ -145,21 +188,25 @@ The typography should bridge technical precision and business readability, using
 
 ## Animations
 
-Animations should reinforce the conversational flow, real-time collaboration cues, and document change tracking. Use subtle transitions to guide attention: message send/receive should have gentle fade-in with slight upward motion (200ms ease-out), AI typing indicators should pulse smoothly, presence indicators feature continuous subtle pulsing to show active status, typing indicators animate with staggered dot bouncing, PR status changes should transition colors fluidly (300ms), and diff panels should slide open gracefully (250ms ease-in-out). Active user avatars scale on hover (1.1x) and appear with staggered entrance animations. Activity feed items fade in sequentially with slight x-axis motion. Avoid aggressive animations that distract from content - every motion should feel purposeful and natural, like watching a real conversation unfold with teammates present.
+## Animations
+
+Animations should reinforce momentum, progress, and forward motion. The dashboard entrance uses staggered animations (framer-motion) to reveal trajectory story, then metrics, then next action - building narrative momentum. Velocity trend indicators (up/down arrows) pulse subtly when showing positive momentum. Progress bars fill smoothly with spring physics (300ms) celebrating each milestone. Message send/receive has gentle fade-in with upward motion (200ms ease-out). AI typing indicators pulse smoothly. Next action cards scale up gently (1.02x) on hover, inviting interaction. Presence indicators feature continuous subtle pulsing for active status. PR status transitions use fluid color morphing (300ms). Dashboard re-entries fade smoothly (400ms) to maintain spatial consistency. Momentum metrics update with satisfying number counting animations. Empty state illustrations breathe gently to feel alive, not static. Avoid aggressive animations that create anxiety about velocity - every motion should feel confident and purposeful, reinforcing that the project is moving forward.
 
 ## Component Selection
 
 **Components**:
-- **Authentication Form**: Custom full-screen auth component with tabbed interface (sign in/sign up), email/password inputs with icons, role selection with radio buttons
-- **New Chat Dialog**: Modal dialog with cascading dropdowns for Domain/Service/Feature selection, inline creation of new categories
+- **Momentum Dashboard**: Custom dashboard component with progress narrative, velocity metrics (decisions/hour), trend indicators, next action card with urgency badges, stage progress bar
+- **Authentication Form**: Custom full-screen auth component with tabbed interface (sign in/sign up), email/password inputs with icons, role selection emphasizing Sarah (Business) vs Marcus (Technical) personas
+- **New Decision Thread Dialog**: Modal dialog with cascading dropdowns for Domain/Service/Feature selection, inline creation of new categories, decision-focused language
 - **Sidebar**: Custom collapsible sidebar with hierarchical tree navigation for chats (shadcn Collapsible component for expand/collapse)
-- **ScrollArea**: For chat message history, file diff viewing, and hierarchical chat list
+- **ScrollArea**: For chat message history, file diff viewing, hierarchical chat list, and dashboard content
 - **Avatar**: User profile pictures with role badges (technical/business), also used for presence indicators with pulsing active status
-- **Card**: PR cards, file change preview cards, authentication card container
-- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support, document translation viewer, new chat organization dialog
+- **Card**: Dashboard metric cards, PR cards, file change preview cards, authentication card container, next action card with urgency styling
+- **Progress**: Linear progress bar for stage completion, velocity tracking
+- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support, document translation viewer, new decision thread dialog
 - **Textarea**: Chat message input with auto-resize and typing detection
-- **Button**: Primary (send message, create PR, sign up/sign in), Secondary (cancel, view details, sign out), Destructive (close PR), Translation triggers
-- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions), translation status, chat message counts, hierarchy level counts
+- **Button**: Primary (send message, create PR, next action CTAs), Secondary (skip, alternate paths), Destructive (close PR), Ghost (navigate home)
+- **Badge**: Role indicators (Sarah/Marcus), PR status, urgency indicators (high/medium/low), stage badges, file change counts, momentum trend badges
 - **Separator**: Visual breaks between chat sections and PR items
 - **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"; also used for view mode switching in file preview, and for Sign In/Sign Up
 - **Accordion**: Expandable file diffs within PR view
