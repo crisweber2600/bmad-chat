@@ -30,6 +30,21 @@ export interface Message {
   timestamp: number
   userId?: string
   fileChanges?: FileChange[]
+  translations?: MessageTranslation[]
+}
+
+export interface MessageTranslation {
+  role: UserRole
+  segments: TranslatedSegment[]
+}
+
+export interface TranslatedSegment {
+  originalText: string
+  startIndex: number
+  endIndex: number
+  explanation: string
+  context: string
+  simplifiedText?: string
 }
 
 export interface EmojiReaction {

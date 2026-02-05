@@ -463,6 +463,98 @@ Format your response as JSON with this structure:
     )
   }
 
+  const handleTranslateMessage = async (messageId: string) => {
+    if (!currentUser || !activeChat) return
+
+    const chat = (chats || []).find((c) => c.id === activeChat)
+    if (!chat) return
+
+    const message = chat.messages.find((m) => m.id === messageId)
+    if (!message) return
+
+    if (message.translations?.find((t) => t.role === currentUser.role)) {
+      toast.info('Message already translated for your role')
+      return
+    }
+
+    try {
+      const roleDescription = currentUser.role === 'business'
+        ? 'a business user who needs plain language explanations without technical jargon'
+        : 'a technical user who needs detailed implementation specifics and technical accuracy'
+
+      const promptText = `You are a translator that helps ${roleDescription} understand documentation and technical content.
+
+Analyze the following text and identify segments that need explanation for a ${currentUser.role} user:
+
+"${message.content}"
+
+For each technical term, API reference, code snippet, or jargon that needs explanation:
+1. Identify the exact text that needs clarification
+2. Provide a clear explanation appropriate for a ${currentUser.role} user
+3. Give context about why it matters in the larger project
+
+${currentUser.role === 'business' 
+  ? 'Focus on business impact, user benefits, and outcomes. Avoid technical implementation details.' 
+  : 'Focus on implementation details, APIs, architecture, and technical specifications.'}
+
+Return a JSON object with this exact structure:
+{
+  "segments": [
+    {
+      "originalText": "the exact text from the message that needs explanation",
+      "startIndex": 0,
+      "endIndex": 10,
+      "explanation": "clear explanation for ${currentUser.role} user",
+      "context": "why this matters in the project",
+      "simplifiedText": "optional simplified version (only if significantly clearer)"
+    }
+  ]
+}
+
+Important: 
+- startIndex and endIndex must match the exact position in the original text
+- Only include segments that genuinely need explanation for a ${currentUser.role} user
+- If nothing needs explanation, return an empty segments array`
+
+      const response = await window.spark.llm(promptText, 'gpt-4o', true)
+      const parsed = JSON.parse(response)
+
+      setChats((current) =>
+        (current || []).map((chat) =>
+          chat.id === activeChat
+            ? {
+                ...chat,
+                messages: chat.messages.map((msg) =>
+                  msg.id === messageId
+                    ? {
+                        ...msg,
+                        translations: [
+                          ...(msg.translations || []),
+                          {
+                            role: currentUser.role,
+                            segments: parsed.segments || [],
+                          },
+                        ],
+                      }
+                    : msg
+                ),
+                updatedAt: Date.now(),
+              }
+            : chat
+        )
+      )
+
+      if (parsed.segments && parsed.segments.length > 0) {
+        toast.success(`Translated ${parsed.segments.length} term${parsed.segments.length > 1 ? 's' : ''} for ${currentUser.role} context`)
+      } else {
+        toast.info('No terms needed translation')
+      }
+    } catch (error) {
+      toast.error('Failed to translate message')
+      console.error(error)
+    }
+  }
+
   const toggleReactionOnComment = (comment: LineComment, emoji: string, user: User): LineComment => {
     const reactions = comment.reactions || []
     const existingReaction = reactions.find((r) => r.emoji === emoji)
@@ -631,6 +723,7 @@ Format your response as JSON with this structure:
                       key={message.id}
                       message={message}
                       user={currentUser || undefined}
+                      onTranslate={handleTranslateMessage}
                     />
                   ))}
                   {typingUsers.length > 0 && (

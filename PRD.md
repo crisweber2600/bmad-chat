@@ -66,6 +66,14 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: Previews open instantly, view modes switch smoothly, line numbers display correctly, syntax highlighting for markdown, additions/deletions clearly color-coded (green/red), navigation between multiple files works seamlessly, mobile-responsive layout adapts preview to smaller screens
 - **Backend Integration**: ✅ Uses existing FileChange type from types.ts, operates on staged changes stored in component state
 
+### Role-Based Content Translation
+- **Functionality**: AI-powered translation system that adapts documentation and messages to the user's role (technical or business), providing contextual explanations via interactive tooltips and simplified language
+- **Purpose**: Bridge communication gaps between technical and business users by making complex technical content accessible to business users and providing implementation details to technical users
+- **Trigger**: User clicks "Translate for [Role]" button on AI messages or file changes
+- **Progression**: User views message/document → Clicks translate button for their role → AI analyzes content via window.spark.llm → Identifies terms/concepts needing explanation → Segments are underlined with info icons → User hovers over segments → Tooltip shows explanation, context, and optionally simplified text → User understands content in their context
+- **Success criteria**: Translations appear within 3 seconds, tooltips are informative and role-appropriate, technical jargon explained for business users, business implications detailed for technical users, translations persist with messages, multiple segments can be highlighted simultaneously, mobile-friendly tooltip interactions
+- **Backend Integration**: ✅ Uses window.spark.llm() with gpt-4o for intelligent content analysis, translations stored in message objects with useKV persistence, role-specific prompting based on window.spark.user() role
+
 ## Edge Case Handling
 
 - **Concurrent Edits**: When multiple users modify the same markdown file simultaneously, show merge conflict indicators and allow manual resolution
@@ -79,6 +87,9 @@ This application requires sophisticated state management across multiple chat se
 - **Presence Polling Failures**: Service continues to attempt reconnection, users remain visible with last known state until timeout
 - **Empty File Changes**: Preview dialogs gracefully handle files with no additions or deletions, showing appropriate empty state messages
 - **Single File Navigation**: Preview navigation UI adapts when only one file is present, hiding unnecessary navigation controls
+- **Translation Failures**: If AI translation fails, show error toast and allow retry; if no terms need translation, inform user gracefully
+- **Overlapping Translations**: If user requests translation multiple times, prevent duplicate work and inform of existing translation
+- **Long Document Translation**: Limit translation to most important 5-10 terms to keep response time reasonable and avoid overwhelming users
 
 ## Design Direction
 
@@ -122,19 +133,19 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - **ScrollArea**: For chat message history and file diff viewing
 - **Avatar**: User profile pictures with role badges (technical/business), also used for presence indicators with pulsing active status
 - **Card**: PR cards, file change preview cards
-- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support
+- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support, document translation viewer
 - **Textarea**: Chat message input with auto-resize and typing detection
-- **Button**: Primary (send message, create PR), Secondary (cancel, view details), Destructive (close PR)
-- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions)
+- **Button**: Primary (send message, create PR), Secondary (cancel, view details), Destructive (close PR), Translation triggers
+- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions), translation status
 - **Separator**: Visual breaks between chat sections and PR items
 - **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"; also used for view mode switching in file preview
 - **Accordion**: Expandable file diffs within PR view
 - **Alert**: System notifications for merge conflicts, AI errors
-- **Tooltip**: Display user names and status on hover of presence avatars
+- **Tooltip**: Display user names and status on hover of presence avatars, show translation explanations on hover of underlined terms
 - **Sheet**: Mobile drawer navigation for chat list, changes panel, and activity feed
 
 **Customizations**:
-- **Message Bubbles**: Custom component with user/AI differentiation (user messages aligned right with accent background, AI messages left with muted background)
+- **Message Bubbles**: Custom component with user/AI differentiation (user messages aligned right with accent background, AI messages left with muted background), with translation button for AI messages
 - **Diff Viewer**: Syntax-highlighted markdown diff component showing additions/deletions with line numbers
 - **File Preview Dialog**: Full-screen modal with multiple view modes (unified, split, before-only, after-only), line numbers, color-coded changes, navigation between files
 - **All Files Preview**: Multi-file preview with file navigation arrows, quick file selector tabs, and persistent view mode selection across files
@@ -142,6 +153,8 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - **Active Users Widget**: Overlapping avatar stack with pulsing presence indicators, hover tooltips showing user names and typing status
 - **Typing Indicator**: Animated dots with user avatars showing who is currently typing
 - **Activity Feed**: Chronological event list with icons and timestamps showing collaboration events (joins, messages, PR activity)
+- **Translation Tooltips**: Interactive tooltips showing term explanations, context, and simplified text with accent-colored underlines and info icons
+- **Document Translation View**: Full-screen translation modal for file changes with line-by-line explanations, role-specific views, and persistent translation state
 
 **States**:
 - Buttons: Hover shows slight scale (1.02) and brightness increase, active state scales down (0.98), disabled has 50% opacity with no-drop cursor
@@ -157,6 +170,7 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - Activity: ChartLine (activity feed), CheckCircle (approved), XCircle (rejected), Clock (pending)
 - File operations: File, FileText, FileDotted (pending changes)
 - Preview actions: Eye (view/preview), SplitVertical (split view), CaretLeft/CaretRight (navigation)
+- Translation: Translate (translate trigger), Info (tooltip indicators for explanations)
 - Navigation: List, CaretLeft/Right, MagnifyingGlass
 
 **Spacing**:

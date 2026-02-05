@@ -1,17 +1,31 @@
-import { Message, User } from '@/lib/types'
+import { Message, User, MessageTranslation } from '@/lib/types'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { User as UserIcon, UserGear, Briefcase } from '@phosphor-icons/react'
 import { motion } from 'framer-motion'
+import { TranslateButton } from '@/components/TranslateButton'
+import { TranslatedText } from '@/components/TranslatedText'
 
 interface ChatMessageProps {
   message: Message
   user?: User
+  onTranslate?: (messageId: string) => Promise<void>
 }
 
-export function ChatMessage({ message, user }: ChatMessageProps) {
+export function ChatMessage({ message, user, onTranslate }: ChatMessageProps) {
   const isUser = message.role === 'user'
+  const userTranslation = user?.role 
+    ? message.translations?.find(t => t.role === user.role)
+    : undefined
+  const hasTranslation = !!userTranslation
+  const showTranslateButton = !isUser && user && onTranslate
+
+  const handleTranslate = async () => {
+    if (onTranslate) {
+      await onTranslate(message.id)
+    }
+  }
 
   return (
     <motion.div
@@ -58,15 +72,31 @@ export function ChatMessage({ message, user }: ChatMessageProps) {
               : 'bg-muted text-foreground'
           )}
         >
-          {message.content}
+          {hasTranslation && userTranslation ? (
+            <TranslatedText 
+              originalText={message.content}
+              segments={userTranslation.segments}
+            />
+          ) : (
+            message.content
+          )}
         </div>
 
-        <span className="text-[10px] sm:text-xs text-muted-foreground">
-          {new Date(message.timestamp).toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] sm:text-xs text-muted-foreground">
+            {new Date(message.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+          {showTranslateButton && (
+            <TranslateButton
+              userRole={user.role}
+              onTranslate={handleTranslate}
+              isTranslated={hasTranslation}
+            />
+          )}
+        </div>
       </div>
     </motion.div>
   )

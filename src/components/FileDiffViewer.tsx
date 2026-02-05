@@ -3,9 +3,11 @@ import { FileChange, User } from '@/lib/types'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FileText, Eye } from '@phosphor-icons/react'
+import { FileText, Eye, Translate } from '@phosphor-icons/react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { FilePreviewDialog } from './FilePreviewDialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { DocumentTranslationView } from './DocumentTranslationView'
 
 interface FileDiffViewerProps {
   fileChanges: FileChange[]
@@ -18,10 +20,17 @@ interface FileDiffViewerProps {
 export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment, onToggleReaction, currentUser }: FileDiffViewerProps) {
   const [previewFile, setPreviewFile] = useState<FileChange | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [translateFile, setTranslateFile] = useState<FileChange | null>(null)
+  const [translateOpen, setTranslateOpen] = useState(false)
 
   const handlePreview = (change: FileChange) => {
     setPreviewFile(change)
     setPreviewOpen(true)
+  }
+
+  const handleTranslate = (change: FileChange) => {
+    setTranslateFile(change)
+    setTranslateOpen(true)
   }
 
   const handleAddLineComment = (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
@@ -54,6 +63,21 @@ export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment
                   <FileText size={16} weight="duotone" className="text-primary shrink-0 sm:w-[18px] sm:h-[18px]" />
                   <span className="font-mono text-xs sm:text-sm text-left truncate">{change.path}</span>
                   <div className="flex gap-1 ml-auto mr-2 shrink-0">
+                    {currentUser && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleTranslate(change)
+                        }}
+                        className="h-7 px-2 text-xs"
+                        title="Translate for your role"
+                      >
+                        <Translate size={14} className="sm:mr-1" />
+                        <span className="hidden sm:inline">Translate</span>
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -117,6 +141,18 @@ export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment
         onToggleReaction={handleToggleReaction}
         currentUser={currentUser}
       />
+
+      <Dialog open={translateOpen} onOpenChange={setTranslateOpen}>
+        <DialogContent className="max-w-4xl h-[85vh] p-0">
+          {translateFile && currentUser && (
+            <DocumentTranslationView
+              fileChange={translateFile}
+              userRole={currentUser.role}
+              onClose={() => setTranslateOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
