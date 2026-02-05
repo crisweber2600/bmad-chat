@@ -1,0 +1,1803 @@
+openapi: 3.1.0
+info:
+  title: BMAD - Business Model Architecture Design Platform API
+  version: 1.0.0
+  description: |
+    REST API for BMAD, a momentum-first collaboration platform that bridges technical and business co-founders
+    through intelligent question routing, Git-based documentation management, and async collaboration workflows.
+    
+    ## Core Concepts
+    
+    - **Users**: Technical or business role-based users with distinct interfaces and permissions
+    - **Chats**: Conversation threads organized by Domain/Service/Feature taxonomy
+    - **Messages**: Chat content with AI-generated file changes and role-specific translations
+    - **Pull Requests**: Documentation changes requiring review and approval
+    - **Collaboration**: Real-time presence, typing indicators, and activity feeds
+    
+    ## Authentication
+    
+    All endpoints (except auth endpoints) require authentication via Bearer token or session cookie.
+  contact:
+    name: BMAD Support
+    email: support@bmad.example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.bmad.example.com/v1
+    description: Production server
+  - url: https://staging-api.bmad.example.com/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Users
+    description: User profile and presence management
+  - name: Chats
+    description: Chat conversation management
+  - name: Messages
+    description: Message creation and AI interaction
+  - name: Pull Requests
+    description: Documentation change review workflow
+  - name: File Changes
+    description: File diff and comment management
+  - name: Collaboration
+    description: Real-time presence and activity tracking
+  - name: Organization
+    description: Domain/Service/Feature taxonomy management
+  - name: AI
+    description: AI-powered features and translations
+
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Authentication
+      summary: Create a new user account
+      description: Register a new user with email, password, name, and role (technical or business)
+      operationId: signUp
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - name
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: sarah@example.com
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: SecurePass123!
+                name:
+                  type: string
+                  minLength: 1
+                  example: Sarah Chen
+                role:
+                  $ref: '#/components/schemas/UserRole'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+                    description: JWT authentication token
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/signin:
+    post:
+      tags:
+        - Authentication
+      summary: Sign in to an existing account
+      description: Authenticate with email and password
+      operationId: signIn
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: sarah@example.com
+                password:
+                  type: string
+                  format: password
+                  example: SecurePass123!
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  token:
+                    type: string
+                    description: JWT authentication token
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/signout:
+    post:
+      tags:
+        - Authentication
+      summary: Sign out current user
+      description: Invalidate the current session or token
+      operationId: signOut
+      responses:
+        '204':
+          description: Successfully signed out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current authenticated user
+      description: Retrieve the profile of the currently authenticated user
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /users/{userId}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Retrieve a user's profile information
+      operationId: getUserById
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/{userId}/presence:
+    put:
+      tags:
+        - Users
+      summary: Update user presence
+      description: Update the current user's presence information (active chat, typing status, etc.)
+      operationId: updatePresence
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                activeChat:
+                  type: string
+                  nullable: true
+                  description: ID of the chat the user is currently viewing
+                  example: chat-1705712345678
+                isTyping:
+                  type: boolean
+                  description: Whether the user is currently typing
+                typingChatId:
+                  type: string
+                  nullable: true
+                  description: ID of the chat where the user is typing
+                cursorPosition:
+                  type: object
+                  description: User's current cursor position
+                  properties:
+                    chatId:
+                      type: string
+                    messageId:
+                      type: string
+      responses:
+        '200':
+          description: Presence updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPresence'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /presence:
+    get:
+      tags:
+        - Collaboration
+      summary: Get all active users
+      description: Retrieve presence information for all currently active users
+      operationId: getActiveUsers
+      parameters:
+        - name: chatId
+          in: query
+          description: Filter to users active in a specific chat
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of active users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserPresence'
+
+  /chats:
+    get:
+      tags:
+        - Chats
+      summary: List all chats
+      description: Retrieve all chats the current user has access to
+      operationId: listChats
+      parameters:
+        - name: domain
+          in: query
+          description: Filter by domain
+          schema:
+            type: string
+        - name: service
+          in: query
+          description: Filter by service
+          schema:
+            type: string
+        - name: feature
+          in: query
+          description: Filter by feature
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of chats to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          description: Number of chats to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of chats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chat'
+                  total:
+                    type: integer
+                    description: Total number of chats matching the filter
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+    post:
+      tags:
+        - Chats
+      summary: Create a new chat
+      description: Create a new chat conversation organized by Domain/Service/Feature
+      operationId: createChat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - domain
+                - service
+                - feature
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  example: User Authentication Flow
+                domain:
+                  type: string
+                  minLength: 1
+                  example: Identity Management
+                service:
+                  type: string
+                  minLength: 1
+                  example: Authentication Service
+                feature:
+                  type: string
+                  minLength: 1
+                  example: OAuth Integration
+      responses:
+        '201':
+          description: Chat created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /chats/{chatId}:
+    get:
+      tags:
+        - Chats
+      summary: Get chat by ID
+      description: Retrieve a specific chat with all messages
+      operationId: getChatById
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      responses:
+        '200':
+          description: Chat details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Chats
+      summary: Update chat
+      description: Update chat properties (title, taxonomy, etc.)
+      operationId: updateChat
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                domain:
+                  type: string
+                service:
+                  type: string
+                feature:
+                  type: string
+      responses:
+        '200':
+          description: Chat updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Chat'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags:
+        - Chats
+      summary: Delete chat
+      description: Delete a chat and all associated messages
+      operationId: deleteChat
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      responses:
+        '204':
+          description: Chat deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /chats/{chatId}/messages:
+    get:
+      tags:
+        - Messages
+      summary: List messages in a chat
+      description: Retrieve all messages in a specific chat
+      operationId: listMessages
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: before
+          in: query
+          description: Get messages before this timestamp
+          schema:
+            type: integer
+            format: int64
+        - name: after
+          in: query
+          description: Get messages after this timestamp
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+                  hasMore:
+                    type: boolean
+
+    post:
+      tags:
+        - Messages
+      summary: Send a message
+      description: |
+        Send a new message in the chat. The AI will process the message and respond with:
+        - A conversational response appropriate for the user's role
+        - Suggested documentation changes (file additions/deletions)
+        - Routing assessment (whether the question is appropriate for the user's role)
+        - Momentum indicator (high/medium/low)
+      operationId: sendMessage
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  example: How should we handle user authentication?
+      responses:
+        '201':
+          description: Message sent and AI response generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userMessage:
+                    $ref: '#/components/schemas/Message'
+                  aiMessage:
+                    $ref: '#/components/schemas/Message'
+                  routingAssessment:
+                    type: string
+                    example: correctly routed
+                  momentumIndicator:
+                    type: string
+                    enum: [high, medium, low]
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /chats/{chatId}/messages/{messageId}/translate:
+    post:
+      tags:
+        - AI
+      summary: Translate message for user role
+      description: |
+        Translate a message's technical or business terminology into language appropriate
+        for the current user's role. Returns annotated segments with explanations.
+      operationId: translateMessage
+      parameters:
+        - $ref: '#/components/parameters/ChatId'
+        - $ref: '#/components/parameters/MessageId'
+      responses:
+        '200':
+          description: Translation completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  translation:
+                    $ref: '#/components/schemas/MessageTranslation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests:
+    get:
+      tags:
+        - Pull Requests
+      summary: List pull requests
+      description: Retrieve all pull requests with optional status filtering
+      operationId: listPullRequests
+      parameters:
+        - name: status
+          in: query
+          description: Filter by PR status
+          schema:
+            type: string
+            enum: [open, merged, closed, draft]
+        - name: chatId
+          in: query
+          description: Filter by chat ID
+          schema:
+            type: string
+        - name: author
+          in: query
+          description: Filter by author user ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of pull requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pullRequests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PullRequest'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+    post:
+      tags:
+        - Pull Requests
+      summary: Create a pull request
+      description: |
+        Create a new pull request from pending file changes. PRs represent proposed
+        documentation changes that need review before merging to the .bmad/ directory.
+      operationId: createPullRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+                - description
+                - fileChanges
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  example: Add authentication decision document
+                description:
+                  type: string
+                  example: Documents the decision to use OAuth 2.0 for user authentication
+                chatId:
+                  type: string
+                  description: Associated chat ID
+                fileChanges:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FileChange'
+      responses:
+        '201':
+          description: Pull request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /pull-requests/{prId}:
+    get:
+      tags:
+        - Pull Requests
+      summary: Get pull request by ID
+      description: Retrieve a specific pull request with all details
+      operationId: getPullRequestById
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      responses:
+        '200':
+          description: Pull request details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags:
+        - Pull Requests
+      summary: Update pull request
+      description: Update PR title, description, or status
+      operationId: updatePullRequest
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                status:
+                  $ref: '#/components/schemas/PRStatus'
+      responses:
+        '200':
+          description: Pull request updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/merge:
+    post:
+      tags:
+        - Pull Requests
+      summary: Merge pull request
+      description: |
+        Merge the pull request, applying all file changes to the .bmad/ directory
+        in the Git repository. This commits the documentation changes.
+      operationId: mergePullRequest
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                commitMessage:
+                  type: string
+                  example: Merge PR #123 - Add authentication decision
+      responses:
+        '200':
+          description: Pull request merged successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pullRequest:
+                    $ref: '#/components/schemas/PullRequest'
+                  commitId:
+                    type: string
+                    description: Git commit SHA
+                    example: a1b2c3d4e5f6
+        '400':
+          description: PR cannot be merged (conflicts, not approved, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/close:
+    post:
+      tags:
+        - Pull Requests
+      summary: Close pull request
+      description: Close the pull request without merging
+      operationId: closePullRequest
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: Changes no longer needed
+      responses:
+        '200':
+          description: Pull request closed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/approve:
+    post:
+      tags:
+        - Pull Requests
+      summary: Approve pull request
+      description: Add the current user's approval to the pull request
+      operationId: approvePullRequest
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      responses:
+        '200':
+          description: Approval added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/comments:
+    get:
+      tags:
+        - Pull Requests
+      summary: List PR comments
+      description: Retrieve all comments on a pull request
+      operationId: listPRComments
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      responses:
+        '200':
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PRComment'
+
+    post:
+      tags:
+        - Pull Requests
+      summary: Add PR comment
+      description: Add a general comment to the pull request
+      operationId: addPRComment
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                  minLength: 1
+                  example: Looks good to me!
+      responses:
+        '201':
+          description: Comment added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PRComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/files/{fileId}/comments:
+    post:
+      tags:
+        - File Changes
+      summary: Add line comment
+      description: Add a comment on a specific line in a file diff
+      operationId: addLineComment
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+        - name: fileId
+          in: path
+          required: true
+          description: File path/identifier
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - lineNumber
+                - lineType
+                - content
+              properties:
+                lineNumber:
+                  type: integer
+                  minimum: 1
+                  example: 42
+                lineType:
+                  type: string
+                  enum: [addition, deletion, unchanged]
+                content:
+                  type: string
+                  minLength: 1
+                  example: Should we add error handling here?
+                parentId:
+                  type: string
+                  description: ID of parent comment if this is a reply
+      responses:
+        '201':
+          description: Line comment added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/files/{fileId}/comments/{commentId}/resolve:
+    post:
+      tags:
+        - File Changes
+      summary: Resolve line comment
+      description: Mark a line comment thread as resolved
+      operationId: resolveLineComment
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Comment resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /pull-requests/{prId}/files/{fileId}/comments/{commentId}/reactions:
+    post:
+      tags:
+        - File Changes
+      summary: Toggle emoji reaction
+      description: Add or remove an emoji reaction on a line comment
+      operationId: toggleReaction
+      parameters:
+        - $ref: '#/components/parameters/PullRequestId'
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - emoji
+              properties:
+                emoji:
+                  type: string
+                  example: 👍
+      responses:
+        '200':
+          description: Reaction toggled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineComment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /collaboration/events:
+    get:
+      tags:
+        - Collaboration
+      summary: Get recent collaboration events
+      description: Retrieve recent collaboration events (user join/leave, messages, PRs, etc.)
+      operationId: getCollaborationEvents
+      parameters:
+        - name: since
+          in: query
+          description: Return events after this timestamp
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: chatId
+          in: query
+          description: Filter to events in a specific chat
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        '200':
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CollaborationEvent'
+
+    post:
+      tags:
+        - Collaboration
+      summary: Broadcast collaboration event
+      description: Broadcast a collaboration event to other users
+      operationId: broadcastEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  enum: [user_join, user_leave, typing_start, typing_stop, message_sent, pr_created, pr_updated]
+                chatId:
+                  type: string
+                prId:
+                  type: string
+                metadata:
+                  type: object
+                  additionalProperties: true
+      responses:
+        '201':
+          description: Event broadcasted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollaborationEvent'
+
+  /organization/domains:
+    get:
+      tags:
+        - Organization
+      summary: List all domains
+      description: Get all unique domains from existing chats
+      operationId: listDomains
+      responses:
+        '200':
+          description: List of domains
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domains:
+                    type: array
+                    items:
+                      type: string
+                    example: [Identity Management, Payment Processing, Content Delivery]
+
+  /organization/services:
+    get:
+      tags:
+        - Organization
+      summary: List all services
+      description: Get all unique services from existing chats
+      operationId: listServices
+      parameters:
+        - name: domain
+          in: query
+          description: Filter services by domain
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services:
+                    type: array
+                    items:
+                      type: string
+                    example: [Authentication Service, Authorization Service, User Profile Service]
+
+  /organization/features:
+    get:
+      tags:
+        - Organization
+      summary: List all features
+      description: Get all unique features from existing chats
+      operationId: listFeatures
+      parameters:
+        - name: domain
+          in: query
+          description: Filter features by domain
+          schema:
+            type: string
+        - name: service
+          in: query
+          description: Filter features by service
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of features
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  features:
+                    type: array
+                    items:
+                      type: string
+                    example: [OAuth Integration, SSO Support, MFA]
+
+  /ai/defaults:
+    post:
+      tags:
+        - AI
+      summary: Generate AI defaults
+      description: |
+        Generate AI-suggested defaults for a question or decision. Used when the
+        appropriate user is unavailable to provide input (provisional commit pattern).
+      operationId: generateAIDefaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - question
+                - context
+              properties:
+                question:
+                  type: string
+                  example: What authentication strategy should we use?
+                context:
+                  type: object
+                  description: Contextual information about the project
+                  properties:
+                    chatId:
+                      type: string
+                    domain:
+                      type: string
+                    service:
+                      type: string
+                    previousDecisions:
+                      type: array
+                      items:
+                        type: object
+      responses:
+        '200':
+          description: AI defaults generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestion:
+                    type: string
+                    description: AI-suggested answer
+                  confidence:
+                    type: number
+                    format: float
+                    minimum: 0
+                    maximum: 1
+                    description: Confidence score (0-1)
+                  reasoning:
+                    type: string
+                    description: Explanation of the suggestion
+                  alternatives:
+                    type: array
+                    description: Alternative options
+                    items:
+                      type: object
+                      properties:
+                        option:
+                          type: string
+                        pros:
+                          type: array
+                          items:
+                            type: string
+                        cons:
+                          type: array
+                          items:
+                            type: string
+
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      description: Check if the API is running and healthy
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  timestamp:
+                    type: integer
+                    format: int64
+                  version:
+                    type: string
+                    example: 1.0.0
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/signin or /auth/signup
+
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Session cookie set by the server
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: string
+        example: user-1705712345678
+
+    ChatId:
+      name: chatId
+      in: path
+      required: true
+      description: Chat ID
+      schema:
+        type: string
+        example: chat-1705712345678
+
+    MessageId:
+      name: messageId
+      in: path
+      required: true
+      description: Message ID
+      schema:
+        type: string
+        example: msg-1705712345678
+
+    PullRequestId:
+      name: prId
+      in: path
+      required: true
+      description: Pull request ID
+      schema:
+        type: string
+        example: pr-1705712345678
+
+  responses:
+    BadRequest:
+      description: Bad request - invalid input
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    UserRole:
+      type: string
+      enum: [technical, business]
+      description: |
+        User role determines their interface, permissions, and AI interaction style:
+        - **technical**: Engineers who work in Git, prefer detailed specs, commit last
+        - **business**: Non-technical co-founders who need momentum and plain language
+      example: business
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - role
+        - avatarUrl
+      properties:
+        id:
+          type: string
+          example: user-1705712345678
+        email:
+          type: string
+          format: email
+          example: sarah@example.com
+        name:
+          type: string
+          example: Sarah Chen
+        role:
+          $ref: '#/components/schemas/UserRole'
+        avatarUrl:
+          type: string
+          format: uri
+          example: https://api.dicebear.com/7.x/initials/svg?seed=Sarah%20Chen
+        createdAt:
+          type: integer
+          format: int64
+          description: Timestamp when user was created
+          example: 1705712345678
+
+    UserPresence:
+      type: object
+      required:
+        - userId
+        - userName
+        - avatarUrl
+        - lastSeen
+        - isTyping
+      properties:
+        userId:
+          type: string
+          example: user-1705712345678
+        userName:
+          type: string
+          example: Sarah Chen
+        avatarUrl:
+          type: string
+          format: uri
+        activeChat:
+          type: string
+          nullable: true
+          description: ID of the chat the user is currently viewing
+          example: chat-1705712345678
+        lastSeen:
+          type: integer
+          format: int64
+          description: Timestamp of last activity
+          example: 1705712345678
+        isTyping:
+          type: boolean
+          description: Whether the user is currently typing
+        typingChatId:
+          type: string
+          nullable: true
+          description: ID of the chat where the user is typing
+        cursorPosition:
+          type: object
+          description: User's current cursor position
+          properties:
+            chatId:
+              type: string
+            messageId:
+              type: string
+
+    Chat:
+      type: object
+      required:
+        - id
+        - title
+        - createdAt
+        - updatedAt
+        - messages
+        - participants
+      properties:
+        id:
+          type: string
+          example: chat-1705712345678
+        title:
+          type: string
+          example: User Authentication Flow
+        createdAt:
+          type: integer
+          format: int64
+          example: 1705712345678
+        updatedAt:
+          type: integer
+          format: int64
+          example: 1705712355678
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        participants:
+          type: array
+          description: User IDs of chat participants
+          items:
+            type: string
+          example: [user-1705712345678, user-1705712345679]
+        domain:
+          type: string
+          description: Domain in the organizational taxonomy
+          example: Identity Management
+        service:
+          type: string
+          description: Service in the organizational taxonomy
+          example: Authentication Service
+        feature:
+          type: string
+          description: Feature in the organizational taxonomy
+          example: OAuth Integration
+
+    Message:
+      type: object
+      required:
+        - id
+        - chatId
+        - content
+        - role
+        - timestamp
+      properties:
+        id:
+          type: string
+          example: msg-1705712345678
+        chatId:
+          type: string
+          example: chat-1705712345678
+        content:
+          type: string
+          example: We should implement OAuth 2.0 for authentication
+        role:
+          type: string
+          enum: [user, assistant]
+          description: |
+            - **user**: Message from a human user
+            - **assistant**: AI-generated response
+        timestamp:
+          type: integer
+          format: int64
+          example: 1705712345678
+        userId:
+          type: string
+          description: ID of the user who sent the message (for user messages)
+          example: user-1705712345678
+        fileChanges:
+          type: array
+          description: Documentation changes suggested by AI
+          items:
+            $ref: '#/components/schemas/FileChange'
+        translations:
+          type: array
+          description: Role-specific translations of the message
+          items:
+            $ref: '#/components/schemas/MessageTranslation'
+
+    MessageTranslation:
+      type: object
+      required:
+        - role
+        - segments
+      properties:
+        role:
+          $ref: '#/components/schemas/UserRole'
+        segments:
+          type: array
+          description: Translated/explained segments of the message
+          items:
+            $ref: '#/components/schemas/TranslatedSegment'
+
+    TranslatedSegment:
+      type: object
+      required:
+        - originalText
+        - startIndex
+        - endIndex
+        - explanation
+        - context
+      properties:
+        originalText:
+          type: string
+          description: The exact text from the message that needs explanation
+          example: OAuth 2.0
+        startIndex:
+          type: integer
+          description: Starting character position in original message
+          example: 25
+        endIndex:
+          type: integer
+          description: Ending character position in original message
+          example: 34
+        explanation:
+          type: string
+          description: Clear explanation appropriate for the user's role
+          example: A secure industry-standard way for users to log in using their Google or Facebook accounts
+        context:
+          type: string
+          description: Why this matters in the larger project
+          example: This allows users to sign up quickly without creating a new password, increasing conversion rates
+        simplifiedText:
+          type: string
+          description: Optional simplified version if significantly clearer
+          example: Social login
+
+    FileChange:
+      type: object
+      required:
+        - path
+        - additions
+        - deletions
+        - status
+      properties:
+        path:
+          type: string
+          description: File path in the .bmad/ directory
+          example: .bmad/decisions/auth-strategy.md
+        additions:
+          type: array
+          description: Lines to add to the file
+          items:
+            type: string
+          example:
+            - "# Decision: Authentication Strategy"
+            - "**Status:** Approved"
+            - "We will use OAuth 2.0 for user authentication."
+        deletions:
+          type: array
+          description: Lines to remove from the file
+          items:
+            type: string
+          example: []
+        status:
+          type: string
+          enum: [pending, staged, committed]
+          description: |
+            - **pending**: Suggested by AI, not yet in a PR
+            - **staged**: Part of an open PR
+            - **committed**: Merged to repository
+        lineComments:
+          type: array
+          description: Comments on specific lines in the diff
+          items:
+            $ref: '#/components/schemas/LineComment'
+
+    LineComment:
+      type: object
+      required:
+        - id
+        - fileId
+        - lineNumber
+        - lineType
+        - author
+        - authorAvatar
+        - content
+        - timestamp
+        - resolved
+      properties:
+        id:
+          type: string
+          example: line-comment-1705712345678
+        fileId:
+          type: string
+          description: Path of the file this comment is on
+          example: .bmad/decisions/auth-strategy.md
+        lineNumber:
+          type: integer
+          minimum: 1
+          description: Line number in the diff
+          example: 42
+        lineType:
+          type: string
+          enum: [addition, deletion, unchanged]
+          description: Type of line being commented on
+        author:
+          type: string
+          description: Name of the comment author
+          example: Marcus Lee
+        authorAvatar:
+          type: string
+          format: uri
+          description: Avatar URL of the comment author
+        content:
+          type: string
+          description: Comment text
+          example: Should we add error handling for failed authentication?
+        timestamp:
+          type: integer
+          format: int64
+          example: 1705712345678
+        resolved:
+          type: boolean
+          description: Whether the comment thread is resolved
+          default: false
+        replies:
+          type: array
+          description: Nested replies to this comment
+          items:
+            $ref: '#/components/schemas/LineComment'
+        reactions:
+          type: array
+          description: Emoji reactions on this comment
+          items:
+            $ref: '#/components/schemas/EmojiReaction'
+
+    EmojiReaction:
+      type: object
+      required:
+        - emoji
+        - userIds
+        - userNames
+      properties:
+        emoji:
+          type: string
+          description: Emoji character
+          example: 👍
+        userIds:
+          type: array
+          description: IDs of users who reacted with this emoji
+          items:
+            type: string
+          example: [user-1705712345678]
+        userNames:
+          type: array
+          description: Names of users who reacted with this emoji
+          items:
+            type: string
+          example: [Sarah Chen]
+
+    PRStatus:
+      type: string
+      enum: [open, merged, closed, draft]
+      description: |
+        - **open**: PR is open and awaiting review/approval
+        - **merged**: PR has been merged to the repository
+        - **closed**: PR was closed without merging
+        - **draft**: PR is still being worked on
+
+    PullRequest:
+      type: object
+      required:
+        - id
+        - title
+        - description
+        - author
+        - status
+        - createdAt
+        - updatedAt
+        - fileChanges
+        - comments
+        - approvals
+      properties:
+        id:
+          type: string
+          example: pr-1705712345678
+        title:
+          type: string
+          example: Add authentication decision document
+        description:
+          type: string
+          example: Documents the decision to use OAuth 2.0 for user authentication
+        chatId:
+          type: string
+          description: Associated chat ID
+          example: chat-1705712345678
+        author:
+          type: string
+          description: Name of the PR author
+          example: Sarah Chen
+        status:
+          $ref: '#/components/schemas/PRStatus'
+        createdAt:
+          type: integer
+          format: int64
+          example: 1705712345678
+        updatedAt:
+          type: integer
+          format: int64
+          example: 1705712355678
+        fileChanges:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileChange'
+        comments:
+          type: array
+          description: General comments on the PR
+          items:
+            $ref: '#/components/schemas/PRComment'
+        approvals:
+          type: array
+          description: User IDs who have approved the PR
+          items:
+            type: string
+          example: [user-1705712345679]
+
+    PRComment:
+      type: object
+      required:
+        - id
+        - prId
+        - author
+        - content
+        - timestamp
+      properties:
+        id:
+          type: string
+          example: comment-1705712345678
+        prId:
+          type: string
+          example: pr-1705712345678
+        author:
+          type: string
+          description: Name of the comment author
+          example: Marcus Lee
+        content:
+          type: string
+          example: Looks good to me!
+        timestamp:
+          type: integer
+          format: int64
+          example: 1705712345678
+
+    CollaborationEvent:
+      type: object
+      required:
+        - id
+        - type
+        - userId
+        - userName
+        - timestamp
+      properties:
+        id:
+          type: string
+          example: event-1705712345678
+        type:
+          type: string
+          enum: [user_join, user_leave, typing_start, typing_stop, message_sent, pr_created, pr_updated]
+        userId:
+          type: string
+          example: user-1705712345678
+        userName:
+          type: string
+          example: Sarah Chen
+        chatId:
+          type: string
+          description: Associated chat ID (for chat events)
+          example: chat-1705712345678
+        prId:
+          type: string
+          description: Associated PR ID (for PR events)
+          example: pr-1705712345678
+        timestamp:
+          type: integer
+          format: int64
+          example: 1705712345678
+        metadata:
+          type: object
+          description: Additional event-specific data
+          additionalProperties: true
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code
+          example: invalid_request
+        message:
+          type: string
+          description: Human-readable error message
+          example: The request body is missing required field 'email'
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
