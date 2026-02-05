@@ -13,12 +13,12 @@ This application requires sophisticated state management across multiple chat se
 ## Essential Features
 
 ### Multi-User Chat Interface
-- **Functionality**: Real-time chat interface powered by Spark LLM SDK (gpt-4o model) where users can have conversations that generate documentation
-- **Purpose**: Creates a familiar, accessible interface for both technical and business users to collaborate through natural language
+- **Functionality**: Real-time chat interface powered by Spark LLM SDK (gpt-4o model) where multiple users can collaborate, see each other's presence, and have conversations that generate documentation
+- **Purpose**: Creates a familiar, accessible interface for both technical and business users to collaborate through natural language with real-time awareness of other team members
 - **Trigger**: User selects or creates a new chat session from the sidebar
-- **Progression**: User opens app → Views chat list → Selects/creates chat → Types message → AI responds via Spark LLM → Documentation changes are proposed → User continues conversation or reviews changes
-- **Success criteria**: Messages send instantly, AI responses stream naturally via window.spark.llm, chat history persists across sessions using window.spark.kv, interface adapts to user type (technical/business)
-- **Backend Integration**: ✅ Uses window.spark.llm() with gpt-4o for AI responses, window.spark.kv for persistent storage
+- **Progression**: User opens app → Views chat list → Selects/creates chat → Sees active collaborators → Types message (others see typing indicator) → AI responds via Spark LLM → Documentation changes are proposed → User continues conversation or reviews changes → Real-time activity updates for all participants
+- **Success criteria**: Messages send instantly, AI responses stream naturally via window.spark.llm, chat history persists across sessions using window.spark.kv, interface adapts to user type (technical/business), presence indicators show active users, typing indicators work in real-time
+- **Backend Integration**: ✅ Uses window.spark.llm() with gpt-4o for AI responses, window.spark.kv for persistent storage and real-time presence tracking
 
 ### User Role Management
 - **Functionality**: Differentiate between technical and business users with tailored experiences
@@ -50,14 +50,25 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: No messages lost, chats load quickly, search finds relevant conversations, timestamps accurate
 - **Backend Integration**: ✅ Uses useKV React hook for reactive state management, all chats and pull requests persist in KV store
 
+### Real-Time Collaboration
+- **Functionality**: Multi-user presence awareness with live indicators showing who's online, what they're viewing, and when they're typing. Activity feed displays recent collaboration events.
+- **Purpose**: Enable seamless team coordination by providing visibility into other users' activities and fostering a sense of shared workspace
+- **Trigger**: Automatic when users join the platform or switch between chats
+- **Progression**: User logs in → Presence broadcast to all active users → User enters chat → Active users displayed in header → User types → Typing indicator shown to others → User sends message/creates PR → Activity logged and displayed to team → Continuous polling for updates every 2 seconds
+- **Success criteria**: Presence updates within 2 seconds, typing indicators appear immediately, active user avatars display with pulsing animation, activity feed shows chronological events, stale presence cleaned up after 30 seconds of inactivity
+- **Backend Integration**: ✅ Uses window.spark.kv for presence data and collaboration events storage, custom polling mechanism for real-time updates, collaborative service manages presence heartbeat every 5 seconds
+
 ## Edge Case Handling
 
 - **Concurrent Edits**: When multiple users modify the same markdown file simultaneously, show merge conflict indicators and allow manual resolution
 - **AI Service Outage**: Display graceful error messages, queue messages for retry, allow manual markdown editing as fallback
 - **Large Markdown Files**: Implement pagination/lazy loading for diffs, show summary of changes before full diff
-- **Network Interruptions**: Optimistic UI updates with retry logic, clearly indicate pending/failed messages
-- **Empty States**: Welcoming onboarding for first chat, helpful prompts when no PRs exist, clear guidance for new users
+- **Network Interruptions**: Optimistic UI updates with retry logic, clearly indicate pending/failed messages, presence system auto-recovers on reconnection
+- **Empty States**: Welcoming onboarding for first chat, helpful prompts when no PRs exist, clear guidance for new users, empty activity feed shows "No recent activity"
 - **Permission Issues**: Graceful handling when user lacks merge permissions, request access flows
+- **Stale Presence Data**: Automatic cleanup of user presence after 30 seconds of inactivity to prevent ghost users in collaboration indicators
+- **Race Conditions**: Proper state management using functional updates to prevent data loss when multiple events occur simultaneously
+- **Presence Polling Failures**: Service continues to attempt reconnection, users remain visible with last known state until timeout
 
 ## Design Direction
 
@@ -92,28 +103,33 @@ The typography should bridge technical precision and business readability, using
 
 ## Animations
 
-Animations should reinforce the conversational flow and document change tracking. Use subtle transitions to guide attention: message send/receive should have gentle fade-in with slight upward motion (200ms ease-out), AI typing indicators should pulse smoothly, PR status changes should transition colors fluidly (300ms), and diff panels should slide open gracefully (250ms ease-in-out). Avoid aggressive animations that distract from content - every motion should feel purposeful and natural, like watching a real conversation unfold.
+Animations should reinforce the conversational flow, real-time collaboration cues, and document change tracking. Use subtle transitions to guide attention: message send/receive should have gentle fade-in with slight upward motion (200ms ease-out), AI typing indicators should pulse smoothly, presence indicators feature continuous subtle pulsing to show active status, typing indicators animate with staggered dot bouncing, PR status changes should transition colors fluidly (300ms), and diff panels should slide open gracefully (250ms ease-in-out). Active user avatars scale on hover (1.1x) and appear with staggered entrance animations. Activity feed items fade in sequentially with slight x-axis motion. Avoid aggressive animations that distract from content - every motion should feel purposeful and natural, like watching a real conversation unfold with teammates present.
 
 ## Component Selection
 
 **Components**:
 - **Sidebar**: Custom collapsible sidebar for chat list and PR queue (shadcn Sidebar component as base)
 - **ScrollArea**: For chat message history and file diff viewing
-- **Avatar**: User profile pictures with role badges (technical/business)
+- **Avatar**: User profile pictures with role badges (technical/business), also used for presence indicators with pulsing active status
 - **Card**: PR cards, file change preview cards
 - **Dialog**: PR creation modal, merge confirmation dialogs
-- **Textarea**: Chat message input with auto-resize
+- **Textarea**: Chat message input with auto-resize and typing detection
 - **Button**: Primary (send message, create PR), Secondary (cancel, view details), Destructive (close PR)
-- **Badge**: Role indicators, PR status, file change counts
+- **Badge**: Role indicators, PR status, file change counts, active user counts
 - **Separator**: Visual breaks between chat sections and PR items
-- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History"
+- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"
 - **Accordion**: Expandable file diffs within PR view
 - **Alert**: System notifications for merge conflicts, AI errors
+- **Tooltip**: Display user names and status on hover of presence avatars
+- **Sheet**: Mobile drawer navigation for chat list, changes panel, and activity feed
 
 **Customizations**:
 - **Message Bubbles**: Custom component with user/AI differentiation (user messages aligned right with accent background, AI messages left with muted background)
 - **Diff Viewer**: Syntax-highlighted markdown diff component showing additions/deletions with line numbers
 - **PR Timeline**: Custom component showing comment threads, approvals, and status changes chronologically
+- **Active Users Widget**: Overlapping avatar stack with pulsing presence indicators, hover tooltips showing user names and typing status
+- **Typing Indicator**: Animated dots with user avatars showing who is currently typing
+- **Activity Feed**: Chronological event list with icons and timestamps showing collaboration events (joins, messages, PR activity)
 
 **States**:
 - Buttons: Hover shows slight scale (1.02) and brightness increase, active state scales down (0.98), disabled has 50% opacity with no-drop cursor
@@ -125,9 +141,10 @@ Animations should reinforce the conversational flow and document change tracking
 - Send message: PaperPlaneRight
 - PR actions: GitPullRequest, GitMerge, GitBranch
 - User roles: User, UserGear (technical), Briefcase (business)
+- Collaboration: UserPlus (join), UserMinus (leave), PencilSimple (typing), Circle (online status)
+- Activity: ChartLine (activity feed), CheckCircle (approved), XCircle (rejected), Clock (pending)
 - File operations: File, FileText, FileDotted (pending changes)
 - Navigation: List, CaretLeft/Right, MagnifyingGlass
-- Status: CheckCircle (approved), XCircle (rejected), Clock (pending)
 
 **Spacing**:
 - Container padding: p-6 (24px) for main content areas
@@ -138,13 +155,16 @@ Animations should reinforce the conversational flow and document change tracking
 
 **Mobile**:
 - ✅ Sidebar collapses to Sheet drawer overlay on mobile (<768px)
-- ✅ Right panel (Changes/PRs) accessible via floating action button with Sheet drawer on mobile
+- ✅ Right panel (Changes/PRs/Activity) accessible via floating action button with Sheet drawer on mobile
 - ✅ Responsive header with adaptive sizing and hidden elements on small screens
+- ✅ Active users widget shows fewer avatars on mobile (3 vs 5 on desktop)
 - ✅ Message bubbles scale appropriately (85% max-width on mobile, 75% on desktop)
 - ✅ Touch-optimized input areas with appropriate sizing (50px on mobile, 60px on desktop)
-- ✅ Floating action button for Changes/PRs access on mobile
+- ✅ Floating action button for Changes/PRs/Activity access on mobile
 - ✅ Dialogs (PR details, Create PR) adapt to mobile screen sizes
 - ✅ Responsive typography: reduced font sizes and spacing on mobile
 - ✅ Single column layout on mobile with drawer-based navigation
 - ✅ Avatar and badge sizing adapts to screen size
 - ✅ Auto-close drawers after selection on mobile for better UX
+- ✅ Typing indicators and presence widgets fully responsive
+- ✅ Activity feed optimized for mobile with touch-friendly event cards

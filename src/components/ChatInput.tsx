@@ -1,19 +1,61 @@
-import { useState, KeyboardEvent } from 'react'
+import { useState, KeyboardEvent, useEffect, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { PaperPlaneRight } from '@phosphor-icons/react'
 
 interface ChatInputProps {
   onSend: (message: string) => void
+  onTypingChange?: (isTyping: boolean) => void
   disabled?: boolean
   placeholder?: string
 }
 
-export function ChatInput({ onSend, disabled, placeholder = 'Type your message...' }: ChatInputProps) {
+export function ChatInput({ onSend, onTypingChange, disabled, placeholder = 'Type your message...' }: ChatInputProps) {
   const [message, setMessage] = useState('')
+  const typingTimeoutRef = useRef<number | null>(null)
+  const isTypingRef = useRef(false)
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const handleMessageChange = (value: string) => {
+    setMessage(value)
+
+    if (onTypingChange) {
+      if (!isTypingRef.current && value.trim()) {
+        isTypingRef.current = true
+        onTypingChange(true)
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      typingTimeoutRef.current = window.setTimeout(() => {
+        if (isTypingRef.current) {
+          isTypingRef.current = false
+          onTypingChange(false)
+        }
+      }, 2000)
+    }
+  }
 
   const handleSend = () => {
     if (message.trim() && !disabled) {
+      if (onTypingChange && isTypingRef.current) {
+        isTypingRef.current = false
+        onTypingChange(false)
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
       onSend(message.trim())
       setMessage('')
     }
@@ -31,7 +73,7 @@ export function ChatInput({ onSend, disabled, placeholder = 'Type your message..
       <Textarea
         id="chat-message-input"
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={(e) => handleMessageChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}

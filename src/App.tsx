@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
 import { Chat, Message, PullRequest, User, FileChange } from '@/lib/types'
+import { useCollaboration } from '@/hooks/use-collaboration'
 import { ChatList } from '@/components/ChatList'
 import { ChatMessage } from '@/components/ChatMessage'
 import { ChatInput } from '@/components/ChatInput'
@@ -8,6 +9,9 @@ import { PRCard } from '@/components/PRCard'
 import { PRDialog } from '@/components/PRDialog'
 import { CreatePRDialog } from '@/components/CreatePRDialog'
 import { FileDiffViewer } from '@/components/FileDiffViewer'
+import { ActiveUsers } from '@/components/ActiveUsers'
+import { TypingIndicator } from '@/components/TypingIndicator'
+import { ActivityFeed } from '@/components/ActivityFeed'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -16,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { GitPullRequest, List, UserGear, Briefcase, FileText, X } from '@phosphor-icons/react'
+import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -33,6 +37,14 @@ function App() {
   const [isTyping, setIsTyping] = useState(false)
   const [chatListOpen, setChatListOpen] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
+
+  const { 
+    activeUsers, 
+    typingUsers, 
+    recentEvents,
+    setTyping,
+    broadcastEvent,
+  } = useCollaboration(currentUser, activeChat)
 
   useEffect(() => {
     loadCurrentUser()
@@ -104,6 +116,8 @@ function App() {
           : chat
       )
     )
+
+    await broadcastEvent('message_sent', { content: content.slice(0, 50) })
 
     setIsTyping(true)
 
@@ -187,6 +201,7 @@ Format your response as JSON with this structure:
 
     setPullRequests((current) => [newPR, ...(current || [])])
     setPendingChanges([])
+    broadcastEvent('pr_created', { prId: newPR.id, title })
     toast.success('Pull request created')
   }
 
@@ -199,6 +214,7 @@ Format your response as JSON with this structure:
       )
     )
     setPRDialogOpen(false)
+    broadcastEvent('pr_updated', { prId, status: 'merged' })
     toast.success('Pull request merged successfully')
   }
 
@@ -305,32 +321,41 @@ Format your response as JSON with this structure:
           <h1 className="text-lg md:text-2xl font-bold tracking-tight">DocFlow</h1>
         </div>
         
-        {currentUser && (
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="hidden sm:block text-right">
-              <div className="text-xs md:text-sm font-medium">{currentUser.name}</div>
-              <Badge variant="outline" className="text-xs">
-                {currentUser.role === 'technical' ? (
-                  <>
-                    <UserGear size={12} className="mr-1" />
-                    Technical
-                  </>
-                ) : (
-                  <>
-                    <Briefcase size={12} className="mr-1" />
-                    Business
-                  </>
-                )}
-              </Badge>
+        <div className="flex items-center gap-3 md:gap-4">
+          {activeUsers.length > 0 && (
+            <>
+              <ActiveUsers users={activeUsers} maxVisible={isMobile ? 3 : 5} />
+              <Separator orientation="vertical" className="h-8 hidden md:block" />
+            </>
+          )}
+          
+          {currentUser && (
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="hidden sm:block text-right">
+                <div className="text-xs md:text-sm font-medium">{currentUser.name}</div>
+                <Badge variant="outline" className="text-xs">
+                  {currentUser.role === 'technical' ? (
+                    <>
+                      <UserGear size={12} className="mr-1" />
+                      Technical
+                    </>
+                  ) : (
+                    <>
+                      <Briefcase size={12} className="mr-1" />
+                      Business
+                    </>
+                  )}
+                </Badge>
+              </div>
+              <Avatar className="h-8 w-8 md:h-10 md:w-10">
+                <AvatarImage src={currentUser.avatarUrl} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs md:text-sm">
+                  {currentUser.name.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
             </div>
-            <Avatar className="h-8 w-8 md:h-10 md:w-10">
-              <AvatarImage src={currentUser.avatarUrl} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-xs md:text-sm">
-                {currentUser.name.slice(0, 2).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       <div className="flex-1 flex min-h-0 relative">
@@ -359,6 +384,9 @@ Format your response as JSON with this structure:
                       user={currentUser || undefined}
                     />
                   ))}
+                  {typingUsers.length > 0 && (
+                    <TypingIndicator typingUsers={typingUsers} />
+                  )}
                   {isTyping && (
                     <div className="flex gap-3 mb-4">
                       <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center">
@@ -374,6 +402,7 @@ Format your response as JSON with this structure:
               </ScrollArea>
               <ChatInput
                 onSend={handleSendMessage}
+                onTypingChange={setTyping}
                 disabled={isTyping}
                 placeholder="Type your message..."
               />
@@ -418,6 +447,10 @@ Format your response as JSON with this structure:
                           {openPRs.length}
                         </Badge>
                       )}
+                    </TabsTrigger>
+                    <TabsTrigger value="activity" className="flex-1">
+                      <ChartLine size={16} className="mr-1" />
+                      Activity
                     </TabsTrigger>
                   </TabsList>
 
@@ -486,6 +519,17 @@ Format your response as JSON with this structure:
                       </div>
                     </ScrollArea>
                   </TabsContent>
+
+                  <TabsContent value="activity" className="flex-1 flex flex-col mt-0">
+                    <ScrollArea className="flex-1 p-4">
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="font-semibold mb-3">Recent Activity</h3>
+                          <ActivityFeed events={recentEvents} maxVisible={20} />
+                        </div>
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
                 </Tabs>
               </div>
             </SheetContent>
@@ -510,6 +554,10 @@ Format your response as JSON with this structure:
                       {openPRs.length}
                     </Badge>
                   )}
+                </TabsTrigger>
+                <TabsTrigger value="activity" className="flex-1">
+                  <ChartLine size={16} className="mr-1" />
+                  Activity
                 </TabsTrigger>
               </TabsList>
 
@@ -575,6 +623,17 @@ Format your response as JSON with this structure:
                         No pull requests yet
                       </div>
                     )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="activity" className="flex-1 flex flex-col mt-0">
+                <ScrollArea className="flex-1 p-4">
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="font-semibold mb-3">Recent Activity</h3>
+                      <ActivityFeed events={recentEvents} maxVisible={20} />
+                    </div>
                   </div>
                 </ScrollArea>
               </TabsContent>

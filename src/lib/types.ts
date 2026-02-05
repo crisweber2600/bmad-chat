@@ -8,6 +8,20 @@ export interface User {
   email: string
 }
 
+export interface UserPresence {
+  userId: string
+  userName: string
+  avatarUrl: string
+  activeChat: string | null
+  lastSeen: number
+  isTyping: boolean
+  typingChatId: string | null
+  cursorPosition?: {
+    chatId: string
+    messageId: string
+  }
+}
+
 export interface Message {
   id: string
   chatId: string
@@ -56,4 +70,15 @@ export interface PRComment {
   author: string
   content: string
   timestamp: number
+}
+
+export interface CollaborationEvent {
+  id: string
+  type: 'user_join' | 'user_leave' | 'typing_start' | 'typing_stop' | 'message_sent' | 'pr_created' | 'pr_updated'
+  userId: string
+  userName: string
+  chatId?: string
+  prId?: string
+  timestamp: number
+  metadata?: Record<string, any>
 }
