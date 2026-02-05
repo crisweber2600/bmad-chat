@@ -27,7 +27,7 @@ export function ChatInput({ onSend, disabled, placeholder = 'Type your message..
   }
 
   return (
-    <div className="flex gap-2 p-4 border-t bg-card">
+    <div className="flex gap-2 p-3 md:p-4 border-t bg-card">
       <Textarea
         id="chat-message-input"
         value={message}
@@ -35,16 +35,16 @@ export function ChatInput({ onSend, disabled, placeholder = 'Type your message..
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-[60px] max-h-[200px] resize-none"
+        className="min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] resize-none text-sm md:text-base"
         rows={2}
       />
       <Button
         onClick={handleSend}
         disabled={!message.trim() || disabled}
         size="icon"
-        className="h-[60px] w-[60px] shrink-0 transition-transform hover:scale-105 active:scale-95"
+        className="h-[50px] w-[50px] md:h-[60px] md:w-[60px] shrink-0 transition-transform hover:scale-105 active:scale-95"
       >
-        <PaperPlaneRight size={20} weight="fill" />
+        <PaperPlaneRight size={18} weight="fill" className="md:w-5 md:h-5" />
       </Button>
     </div>
   )

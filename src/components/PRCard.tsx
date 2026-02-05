@@ -38,24 +38,24 @@ export function PRCard({ pr, onView }: PRCardProps) {
   const Icon = config.icon
 
   return (
-    <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onView}>
-      <div className="flex items-start gap-3">
-        <GitPullRequest size={24} weight="duotone" className="text-primary shrink-0 mt-0.5" />
+    <Card className="p-3 sm:p-4 hover:shadow-md transition-shadow cursor-pointer" onClick={onView}>
+      <div className="flex items-start gap-2 sm:gap-3">
+        <GitPullRequest size={20} weight="duotone" className="text-primary shrink-0 mt-0.5 sm:w-6 sm:h-6" />
         
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-base truncate">{pr.title}</h3>
-            <Badge variant="outline" className={cn('text-xs shrink-0', config.color)}>
-              <Icon size={12} weight="fill" className="mr-1" />
+          <div className="flex items-start sm:items-center gap-2 mb-1 flex-col sm:flex-row">
+            <h3 className="font-semibold text-sm sm:text-base truncate w-full sm:w-auto">{pr.title}</h3>
+            <Badge variant="outline" className={cn('text-[10px] sm:text-xs shrink-0 self-start sm:self-auto', config.color)}>
+              <Icon size={10} weight="fill" className="mr-1 sm:w-3 sm:h-3" />
               {config.label}
             </Badge>
           </div>
           
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 mb-2">
             {pr.description}
           </p>
           
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center flex-wrap gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground">
             <span>
               {pr.fileChanges.length} file{pr.fileChanges.length !== 1 ? 's' : ''} changed
             </span>

@@ -13,18 +13,20 @@ This application requires sophisticated state management across multiple chat se
 ## Essential Features
 
 ### Multi-User Chat Interface
-- **Functionality**: Real-time chat interface powered by Copilot SDK where users can have conversations that generate documentation
+- **Functionality**: Real-time chat interface powered by Spark LLM SDK (gpt-4o model) where users can have conversations that generate documentation
 - **Purpose**: Creates a familiar, accessible interface for both technical and business users to collaborate through natural language
 - **Trigger**: User selects or creates a new chat session from the sidebar
-- **Progression**: User opens app → Views chat list → Selects/creates chat → Types message → AI responds → Documentation changes are proposed → User continues conversation or reviews changes
-- **Success criteria**: Messages send instantly, AI responses stream naturally, chat history persists across sessions, interface adapts to user type (technical/business)
+- **Progression**: User opens app → Views chat list → Selects/creates chat → Types message → AI responds via Spark LLM → Documentation changes are proposed → User continues conversation or reviews changes
+- **Success criteria**: Messages send instantly, AI responses stream naturally via window.spark.llm, chat history persists across sessions using window.spark.kv, interface adapts to user type (technical/business)
+- **Backend Integration**: ✅ Uses window.spark.llm() with gpt-4o for AI responses, window.spark.kv for persistent storage
 
 ### User Role Management
 - **Functionality**: Differentiate between technical and business users with tailored experiences
 - **Purpose**: Optimize interface and suggestions based on user expertise level
-- **Trigger**: User authentication on app load
-- **Progression**: User logs in → Role is identified → Interface adapts (technical users see more code details, business users see simplified views) → User interacts with appropriate context
+- **Trigger**: User authentication on app load via window.spark.user()
+- **Progression**: User logs in → Role is identified via Spark user API → Interface adapts (technical users see more code details, business users see simplified views) → User interacts with appropriate context
 - **Success criteria**: Role badge displays clearly, interface elements adjust based on role, suggestions are contextually appropriate
+- **Backend Integration**: ✅ Uses window.spark.user() to get authenticated user info (avatar, login, email), role assignment persisted in KV store
 
 ### Markdown File Change Tracking
 - **Functionality**: Backend automatically generates/modifies markdown files based on chat conversations, displaying diffs in the UI
@@ -41,11 +43,12 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: PRs create successfully, review comments thread properly, merge operations work, PR status updates in real-time
 
 ### Persistent Chat History
-- **Functionality**: All conversations are saved and searchable across sessions
+- **Functionality**: All conversations are saved and searchable across sessions using Spark KV store
 - **Purpose**: Build institutional knowledge and allow users to reference past discussions
 - **Trigger**: Automatic on every message
-- **Progression**: Message sent → Saved to KV store → Appears in chat list → User can search/filter → Select old chat → Full history loads → Can resume conversation
+- **Progression**: Message sent → Saved to window.spark.kv → Appears in chat list → User can search/filter → Select old chat → Full history loads → Can resume conversation
 - **Success criteria**: No messages lost, chats load quickly, search finds relevant conversations, timestamps accurate
+- **Backend Integration**: ✅ Uses useKV React hook for reactive state management, all chats and pull requests persist in KV store
 
 ## Edge Case Handling
 
@@ -134,10 +137,14 @@ Animations should reinforce the conversational flow and document change tracking
 - Button padding: px-4 py-2 (16px horizontal, 8px vertical) for standard buttons
 
 **Mobile**:
-- Sidebar collapses to drawer overlay on <768px
-- Two-column layout (chat + changes) stacks vertically on mobile
-- Message bubbles maintain full width with appropriate padding
-- PR cards stack in single column
-- Bottom sheet for PR details instead of side panel
-- Floating action button for new chat on mobile
-- Reduced font sizes: Body 14px, Headers scale down proportionally
+- ✅ Sidebar collapses to Sheet drawer overlay on mobile (<768px)
+- ✅ Right panel (Changes/PRs) accessible via floating action button with Sheet drawer on mobile
+- ✅ Responsive header with adaptive sizing and hidden elements on small screens
+- ✅ Message bubbles scale appropriately (85% max-width on mobile, 75% on desktop)
+- ✅ Touch-optimized input areas with appropriate sizing (50px on mobile, 60px on desktop)
+- ✅ Floating action button for Changes/PRs access on mobile
+- ✅ Dialogs (PR details, Create PR) adapt to mobile screen sizes
+- ✅ Responsive typography: reduced font sizes and spacing on mobile
+- ✅ Single column layout on mobile with drawer-based navigation
+- ✅ Avatar and badge sizing adapts to screen size
+- ✅ Auto-close drawers after selection on mobile for better UX

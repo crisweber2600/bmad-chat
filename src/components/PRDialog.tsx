@@ -54,10 +54,10 @@ export function PRDialog({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[90vh] w-[95vw] sm:w-full flex flex-col p-4 sm:p-6">
         <DialogHeader>
-          <div className="flex items-center gap-3">
-            <DialogTitle className="text-2xl flex-1">{pr.title}</DialogTitle>
+          <div className="flex items-start sm:items-center gap-2 sm:gap-3 flex-col sm:flex-row">
+            <DialogTitle className="text-xl sm:text-2xl flex-1">{pr.title}</DialogTitle>
             <Badge
               variant="outline"
               className={cn(
@@ -70,53 +70,53 @@ export function PRDialog({
               {pr.status}
             </Badge>
           </div>
-          <DialogDescription>{pr.description}</DialogDescription>
+          <DialogDescription className="text-sm">{pr.description}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 pr-2 sm:pr-4">
+          <div className="space-y-4 sm:space-y-6">
             <div>
-              <h3 className="font-semibold mb-3">File Changes</h3>
+              <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">File Changes</h3>
               <FileDiffViewer fileChanges={pr.fileChanges} />
             </div>
 
             <Separator />
 
             <div>
-              <h3 className="font-semibold mb-3">
+              <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">
                 Comments ({pr.comments.length})
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {pr.comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
+                  <div key={comment.id} className="flex gap-2 sm:gap-3">
+                    <Avatar className="h-7 w-7 sm:h-8 sm:w-8">
                       <AvatarFallback className="bg-muted">
-                        <UserIcon size={16} />
+                        <UserIcon size={14} className="sm:w-4 sm:h-4" />
                       </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium">{comment.author}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs sm:text-sm font-medium truncate">{comment.author}</span>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground shrink-0">
                           {new Date(comment.timestamp).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-sm text-foreground">{comment.content}</p>
+                      <p className="text-xs sm:text-sm text-foreground break-words">{comment.content}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
               {pr.status === 'open' && (
-                <div className="mt-4 space-y-2">
+                <div className="mt-3 sm:mt-4 space-y-2">
                   <Textarea
                     id="pr-comment-input"
                     placeholder="Add a comment..."
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    className="min-h-[80px]"
+                    className="min-h-[60px] sm:min-h-[80px] text-sm"
                   />
-                  <Button onClick={handleComment} size="sm">
+                  <Button onClick={handleComment} size="sm" className="w-full sm:w-auto">
                     Comment
                   </Button>
                 </div>
@@ -126,27 +126,29 @@ export function PRDialog({
         </ScrollArea>
 
         {pr.status === 'open' && (
-          <div className="flex gap-2 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row gap-2 pt-3 sm:pt-4 border-t">
             <Button
               onClick={() => onApprove(pr.id)}
               variant={hasApproved ? 'secondary' : 'default'}
               disabled={hasApproved}
-              className="flex-1"
+              className="flex-1 text-sm"
+              size="sm"
             >
-              <CheckCircle size={18} weight="fill" className="mr-2" />
+              <CheckCircle size={16} weight="fill" className="mr-1 sm:mr-2" />
               {hasApproved ? 'Approved' : 'Approve'}
             </Button>
             <Button
               onClick={() => onMerge(pr.id)}
               disabled={!canMerge}
               variant="default"
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-sm"
+              size="sm"
             >
-              <GitMerge size={18} weight="fill" className="mr-2" />
+              <GitMerge size={16} weight="fill" className="mr-1 sm:mr-2" />
               Merge PR
             </Button>
-            <Button onClick={() => onClosePR(pr.id)} variant="destructive">
-              <XCircle size={18} weight="fill" className="mr-2" />
+            <Button onClick={() => onClosePR(pr.id)} variant="destructive" size="sm" className="text-sm">
+              <XCircle size={16} weight="fill" className="mr-1 sm:mr-2" />
               Close
             </Button>
           </div>
