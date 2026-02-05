@@ -23,7 +23,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine, SignOut, House } from '@phosphor-icons/react'
+import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine, SignOut, House, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { signUp, signIn, setCurrentUser as saveCurrentUser, getCurrentUser, signOut } from '@/lib/auth'
@@ -44,6 +44,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false)
   const [chatListOpen, setChatListOpen] = useState(false)
   const [rightPanelOpen, setRightPanelOpen] = useState(false)
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
   const [showDashboard, setShowDashboard] = useState(true)
 
   const { 
@@ -1032,31 +1033,64 @@ Important:
             </SheetContent>
           </Sheet>
         ) : (
-          <div className="w-96 border-l bg-card flex flex-col">
-            <Tabs defaultValue="changes" className="flex-1 flex flex-col">
-              <TabsList className="w-full rounded-none border-b">
-                <TabsTrigger value="changes" className="flex-1">
-                  Changes
-                  {(pendingChanges || []).length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {(pendingChanges || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="prs" className="flex-1">
-                  <GitPullRequest size={16} className="mr-1" />
-                  PRs
-                  {openPRs.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {openPRs.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="activity" className="flex-1">
-                  <ChartLine size={16} className="mr-1" />
-                  Activity
-                </TabsTrigger>
-              </TabsList>
+          <div className={`${rightPanelCollapsed ? 'w-12' : 'w-96'} border-l bg-card flex flex-col transition-all duration-300`}>
+            {rightPanelCollapsed ? (
+              <div className="flex flex-col items-center gap-4 pt-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setRightPanelCollapsed(false)}
+                  title="Expand panel"
+                >
+                  <CaretLeft size={20} weight="bold" />
+                </Button>
+                {(pendingChanges || []).length > 0 && (
+                  <Badge variant="secondary" className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs">
+                    {(pendingChanges || []).length}
+                  </Badge>
+                )}
+                {openPRs.length > 0 && (
+                  <Badge variant="secondary" className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs">
+                    {openPRs.length}
+                  </Badge>
+                )}
+              </div>
+            ) : (
+              <Tabs defaultValue="changes" className="flex-1 flex flex-col">
+                <div className="flex items-center border-b">
+                  <TabsList className="flex-1 rounded-none border-0 h-auto">
+                    <TabsTrigger value="changes" className="flex-1">
+                      Changes
+                      {(pendingChanges || []).length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {(pendingChanges || []).length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="prs" className="flex-1">
+                      <GitPullRequest size={16} className="mr-1" />
+                      PRs
+                      {openPRs.length > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {openPRs.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="activity" className="flex-1">
+                      <ChartLine size={16} className="mr-1" />
+                      Activity
+                    </TabsTrigger>
+                  </TabsList>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setRightPanelCollapsed(true)}
+                    title="Collapse panel"
+                    className="shrink-0 mr-2"
+                  >
+                    <CaretRight size={20} weight="bold" />
+                  </Button>
+                </div>
 
               <TabsContent value="changes" className="flex-1 flex flex-col mt-0">
                 <ScrollArea className="flex-1 p-4">
@@ -1141,6 +1175,7 @@ Important:
                 </ScrollArea>
               </TabsContent>
             </Tabs>
+            )}
           </div>
         )}
       </div>
