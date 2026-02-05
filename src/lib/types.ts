@@ -6,6 +6,17 @@ export interface User {
   avatarUrl: string
   role: UserRole
   email: string
+  password?: string
+}
+
+export interface AuthUser {
+  id: string
+  email: string
+  password: string
+  name: string
+  role: UserRole
+  avatarUrl: string
+  createdAt: number
 }
 
 export interface UserPresence {
@@ -82,6 +93,9 @@ export interface Chat {
   updatedAt: number
   messages: Message[]
   participants: string[]
+  domain?: string
+  service?: string
+  feature?: string
 }
 
 export type PRStatus = 'open' | 'merged' | 'closed' | 'draft'

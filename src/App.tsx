@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
-import { Chat, Message, PullRequest, User, FileChange, LineComment } from '@/lib/types'
+import { Chat, Message, PullRequest, User, FileChange, LineComment, UserRole } from '@/lib/types'
 import { useCollaboration } from '@/hooks/use-collaboration'
+import { AuthForm } from '@/components/AuthForm'
+import { NewChatDialog } from '@/components/NewChatDialog'
 import { ChatList } from '@/components/ChatList'
 import { ChatMessage } from '@/components/ChatMessage'
 import { ChatInput } from '@/components/ChatInput'
@@ -20,9 +22,10 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
-import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine } from '@phosphor-icons/react'
+import { GitPullRequest, List, UserGear, Briefcase, FileText, ChartLine, SignOut } from '@phosphor-icons/react'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { signUp, signIn, setCurrentUser as saveCurrentUser, getCurrentUser, signOut } from '@/lib/auth'
 
 function App() {
   const isMobile = useIsMobile()
@@ -30,9 +33,12 @@ function App() {
   const [pullRequests, setPullRequests] = useKV<PullRequest[]>('pull-requests', [])
   const [activeChat, setActiveChat] = useState<string | null>(null)
   const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true)
   const [selectedPR, setSelectedPR] = useState<PullRequest | null>(null)
   const [prDialogOpen, setPRDialogOpen] = useState(false)
   const [createPRDialogOpen, setCreatePRDialogOpen] = useState(false)
+  const [newChatDialogOpen, setNewChatDialogOpen] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<FileChange[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const [chatListOpen, setChatListOpen] = useState(false)
@@ -52,37 +58,106 @@ function App() {
 
   const loadCurrentUser = async () => {
     try {
-      const sparkUser = await window.spark.user()
-      if (sparkUser) {
+      const authUser = await getCurrentUser()
+      if (authUser) {
         const user: User = {
-          id: String(sparkUser.id),
-          name: sparkUser.login || 'User',
-          avatarUrl: sparkUser.avatarUrl || '',
-          email: sparkUser.email || '',
-          role: Math.random() > 0.5 ? 'technical' : 'business',
+          id: authUser.id,
+          name: authUser.name,
+          avatarUrl: authUser.avatarUrl,
+          email: authUser.email,
+          role: authUser.role,
         }
         setCurrentUser(user)
+        setIsAuthenticated(true)
       }
     } catch (error) {
-      const mockUser: User = {
-        id: 'user-1',
-        name: 'Demo User',
-        avatarUrl: '',
-        email: 'demo@example.com',
-        role: 'technical',
+      console.error('Failed to load user:', error)
+    } finally {
+      setIsLoadingAuth(false)
+    }
+  }
+
+  const handleSignIn = async (email: string, password: string) => {
+    try {
+      const authUser = await signIn(email, password)
+      await saveCurrentUser(authUser)
+      const user: User = {
+        id: authUser.id,
+        name: authUser.name,
+        avatarUrl: authUser.avatarUrl,
+        email: authUser.email,
+        role: authUser.role,
       }
-      setCurrentUser(mockUser)
+      setCurrentUser(user)
+      setIsAuthenticated(true)
+      toast.success('Welcome back!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Sign in failed')
+      throw error
+    }
+  }
+
+  const handleSignUp = async (email: string, password: string, name: string, role: UserRole) => {
+    try {
+      const authUser = await signUp(email, password, name, role)
+      await saveCurrentUser(authUser)
+      const user: User = {
+        id: authUser.id,
+        name: authUser.name,
+        avatarUrl: authUser.avatarUrl,
+        email: authUser.email,
+        role: authUser.role,
+      }
+      setCurrentUser(user)
+      setIsAuthenticated(true)
+      toast.success('Account created successfully!')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Sign up failed')
+      throw error
+    }
+  }
+
+  const handleSignOut = async () => {
+    await signOut()
+    setCurrentUser(null)
+    setIsAuthenticated(false)
+    setActiveChat(null)
+    toast.info('Signed out successfully')
+  }
+
+  const getExistingOrganization = () => {
+    const domains = new Set<string>()
+    const services = new Set<string>()
+    const features = new Set<string>()
+
+    ;(chats || []).forEach((chat) => {
+      if (chat.domain) domains.add(chat.domain)
+      if (chat.service) services.add(chat.service)
+      if (chat.feature) features.add(chat.feature)
+    })
+
+    return {
+      domains: Array.from(domains),
+      services: Array.from(services),
+      features: Array.from(features),
     }
   }
 
   const handleNewChat = () => {
+    setNewChatDialogOpen(true)
+  }
+
+  const handleCreateChat = (domain: string, service: string, feature: string, title: string) => {
     const newChat: Chat = {
       id: `chat-${Date.now()}`,
-      title: 'New Conversation',
+      title,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       messages: [],
       participants: currentUser ? [currentUser.id] : [],
+      domain,
+      service,
+      feature,
     }
     
     setChats((current) => [newChat, ...(current || [])])
@@ -90,6 +165,7 @@ function App() {
     if (isMobile) {
       setChatListOpen(false)
     }
+    toast.success('Chat created')
   }
 
   const handleSendMessage = async (content: string) => {
@@ -612,6 +688,7 @@ Important:
   const activeChatData = (chats || []).find((c) => c.id === activeChat)
   const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
   const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
+  const organization = getExistingOrganization()
 
   const handleSelectChat = (chatId: string) => {
     setActiveChat(chatId)
@@ -626,6 +703,21 @@ Important:
     if (isMobile) {
       setRightPanelOpen(false)
     }
+  }
+
+  if (isLoadingAuth) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="text-2xl font-bold mb-2">DocFlow</div>
+          <div className="text-muted-foreground">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <AuthForm onSignIn={handleSignIn} onSignUp={handleSignUp} />
   }
 
   return (
@@ -694,6 +786,9 @@ Important:
                   {currentUser.name.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
+              <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign Out">
+                <SignOut size={20} weight="bold" />
+              </Button>
             </div>
           )}
         </div>
@@ -1015,6 +1110,15 @@ Important:
         onClose={() => setCreatePRDialogOpen(false)}
         onCreate={handleCreatePR}
         fileChanges={pendingChanges || []}
+      />
+
+      <NewChatDialog
+        open={newChatDialogOpen}
+        onClose={() => setNewChatDialogOpen(false)}
+        onCreate={handleCreateChat}
+        existingDomains={organization.domains}
+        existingServices={organization.services}
+        existingFeatures={organization.features}
       />
     </div>
   )

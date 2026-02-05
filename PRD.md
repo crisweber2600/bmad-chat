@@ -1,6 +1,6 @@
 # Planning Guide
 
-A collaborative chat platform that bridges technical and business stakeholders through AI-assisted conversations, automatically generating markdown documentation and managing pull request workflows entirely within the application interface.
+A collaborative chat platform that bridges technical and business stakeholders through AI-assisted conversations, automatically generating markdown documentation and managing pull request workflows entirely within the application interface. Users authenticate with secure credentials and organize conversations hierarchically by Domain, Service, and Feature.
 
 **Experience Qualities**: 
 1. **Conversational** - The interface should feel like a natural dialogue, removing technical barriers between business and technical users through intuitive chat interactions.
@@ -8,9 +8,25 @@ A collaborative chat platform that bridges technical and business stakeholders t
 3. **Efficient** - Rapid iteration cycles where conversations immediately generate actionable documentation changes, eliminating context-switching between tools.
 
 **Complexity Level**: Complex Application (advanced functionality, likely with multiple views)
-This application requires sophisticated state management across multiple chat sessions, real-time AI integration, file change tracking, PR workflow management, and role-based user experiences - all of which constitute an advanced multi-view application.
+This application requires sophisticated state management across multiple chat sessions, real-time AI integration, file change tracking, PR workflow management, role-based user experiences, authentication system, and hierarchical chat organization - all of which constitute an advanced multi-view application.
 
 ## Essential Features
+
+### User Authentication System
+- **Functionality**: Secure sign-up and sign-in flows with email/password authentication, role selection during registration, and persistent session management
+- **Purpose**: Ensure secure access to the platform while allowing users to identify their role (technical/business) for tailored experiences
+- **Trigger**: User opens app without an active session
+- **Progression**: User opens app → Authentication form displays → User selects Sign In or Sign Up tab → For sign up: enters name, email, password, selects role (business/technical) → For sign in: enters email and password → Credentials validated → User session created → User redirected to main app interface
+- **Success criteria**: Credentials persist across sessions, sign up prevents duplicate emails, sign in validates credentials correctly, role selection works during registration, sign out clears session, loading states handle auth checks gracefully
+- **Backend Integration**: ✅ Uses window.spark.kv to store user credentials and current session, custom auth service manages sign up/sign in/sign out operations
+
+### Hierarchical Chat Organization
+- **Functionality**: Chats organized in a three-level hierarchy (Domain → Service → Feature) with collapsible tree navigation and smart filtering
+- **Purpose**: Scale documentation conversations across large organizations by providing clear structure and easy navigation through related topics
+- **Trigger**: User creates new chat or browses chat list
+- **Progression**: User clicks New Chat → Dialog opens with Domain/Service/Feature dropdowns → Each dropdown shows existing options plus "Create New" → User selects or creates at each level → Enters chat title → Chat created in hierarchy → Chat list displays collapsible tree structure → User expands/collapses domains/services/features → Badges show chat counts at each level
+- **Success criteria**: Chats grouped correctly by Domain/Service/Feature, collapsible tree navigation works smoothly, existing options populate dropdowns, new categories can be created inline, chat counts display accurately, hierarchy persists across sessions, mobile-friendly navigation
+- **Backend Integration**: ✅ Extended Chat type with domain/service/feature fields, persisted in window.spark.kv, client-side organization logic in ChatList component
 
 ### Multi-User Chat Interface
 - **Functionality**: Real-time chat interface powered by Spark LLM SDK (gpt-4o model) where multiple users can collaborate, see each other's presence, and have conversations that generate documentation
@@ -21,12 +37,12 @@ This application requires sophisticated state management across multiple chat se
 - **Backend Integration**: ✅ Uses window.spark.llm() with gpt-4o for AI responses, window.spark.kv for persistent storage and real-time presence tracking
 
 ### User Role Management
-- **Functionality**: Differentiate between technical and business users with tailored experiences
+- **Functionality**: Differentiate between technical and business users with tailored experiences based on role selected during sign up
 - **Purpose**: Optimize interface and suggestions based on user expertise level
-- **Trigger**: User authentication on app load via window.spark.user()
-- **Progression**: User logs in → Role is identified via Spark user API → Interface adapts (technical users see more code details, business users see simplified views) → User interacts with appropriate context
-- **Success criteria**: Role badge displays clearly, interface elements adjust based on role, suggestions are contextually appropriate
-- **Backend Integration**: ✅ Uses window.spark.user() to get authenticated user info (avatar, login, email), role assignment persisted in KV store
+- **Trigger**: User selects role during sign up process
+- **Progression**: User signs up → Selects role (business/technical) with visual indicators → Role saved to profile → Interface adapts (technical users see more code details, business users see simplified views) → User interacts with appropriate context → Role badge displays in header
+- **Success criteria**: Role badge displays clearly, interface elements adjust based on role, suggestions are contextually appropriate, role persists across sessions, visible in user profile
+- **Backend Integration**: ✅ Role stored in AuthUser type in window.spark.kv, role badge displays in app header, affects AI prompt generation for translations
 
 ### Markdown File Change Tracking
 - **Functionality**: Backend automatically generates/modifies markdown files based on chat conversations, displaying diffs in the UI
@@ -76,6 +92,11 @@ This application requires sophisticated state management across multiple chat se
 
 ## Edge Case Handling
 
+- **Authentication Failures**: Display clear error messages for invalid credentials, prevent duplicate email registrations, handle missing fields gracefully
+- **Session Persistence**: Auto-load user session on app start, handle expired sessions gracefully, provide sign out option in header
+- **Empty Organization**: When no chats exist, guide user to create first chat with domain/service/feature structure
+- **Deep Hierarchy Navigation**: Handle deeply nested chat structures efficiently, maintain scroll position when expanding/collapsing
+- **Duplicate Category Names**: Allow same service/feature names under different parents (e.g., "API" service in multiple domains)
 - **Concurrent Edits**: When multiple users modify the same markdown file simultaneously, show merge conflict indicators and allow manual resolution
 - **AI Service Outage**: Display graceful error messages, queue messages for retry, allow manual markdown editing as fallback
 - **Large Markdown Files**: Implement pagination/lazy loading for diffs, show summary of changes before full diff
@@ -129,22 +150,31 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 ## Component Selection
 
 **Components**:
-- **Sidebar**: Custom collapsible sidebar for chat list and PR queue (shadcn Sidebar component as base)
-- **ScrollArea**: For chat message history and file diff viewing
+- **Authentication Form**: Custom full-screen auth component with tabbed interface (sign in/sign up), email/password inputs with icons, role selection with radio buttons
+- **New Chat Dialog**: Modal dialog with cascading dropdowns for Domain/Service/Feature selection, inline creation of new categories
+- **Sidebar**: Custom collapsible sidebar with hierarchical tree navigation for chats (shadcn Collapsible component for expand/collapse)
+- **ScrollArea**: For chat message history, file diff viewing, and hierarchical chat list
 - **Avatar**: User profile pictures with role badges (technical/business), also used for presence indicators with pulsing active status
-- **Card**: PR cards, file change preview cards
-- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support, document translation viewer
+- **Card**: PR cards, file change preview cards, authentication card container
+- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support, document translation viewer, new chat organization dialog
 - **Textarea**: Chat message input with auto-resize and typing detection
-- **Button**: Primary (send message, create PR), Secondary (cancel, view details), Destructive (close PR), Translation triggers
-- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions), translation status
+- **Button**: Primary (send message, create PR, sign up/sign in), Secondary (cancel, view details, sign out), Destructive (close PR), Translation triggers
+- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions), translation status, chat message counts, hierarchy level counts
 - **Separator**: Visual breaks between chat sections and PR items
-- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"; also used for view mode switching in file preview
+- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"; also used for view mode switching in file preview, and for Sign In/Sign Up
 - **Accordion**: Expandable file diffs within PR view
-- **Alert**: System notifications for merge conflicts, AI errors
+- **Alert**: System notifications for merge conflicts, AI errors, authentication errors
 - **Tooltip**: Display user names and status on hover of presence avatars, show translation explanations on hover of underlined terms
 - **Sheet**: Mobile drawer navigation for chat list, changes panel, and activity feed
+- **Collapsible**: Hierarchical chat organization with expand/collapse for domains, services, and features
+- **Select**: Dropdown menus for Domain/Service/Feature selection in new chat dialog
+- **RadioGroup**: Role selection during sign up (Business/Technical)
+- **Input**: Text inputs for authentication (email, password, name), chat title, category names
 
 **Customizations**:
+- **Auth Form**: Full-screen gradient background with centered card, tabbed interface switching between sign in and sign up, visual role selection with icons and descriptions
+- **Hierarchical Chat List**: Multi-level collapsible tree with folder icons, caret indicators, and badges showing counts at each level
+- **Organization Dialog**: Smart dropdown system that shows existing options and allows inline creation of new categories
 - **Message Bubbles**: Custom component with user/AI differentiation (user messages aligned right with accent background, AI messages left with muted background), with translation button for AI messages
 - **Diff Viewer**: Syntax-highlighted markdown diff component showing additions/deletions with line numbers
 - **File Preview Dialog**: Full-screen modal with multiple view modes (unified, split, before-only, after-only), line numbers, color-coded changes, navigation between files
@@ -157,11 +187,14 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - **Document Translation View**: Full-screen translation modal for file changes with line-by-line explanations, role-specific views, and persistent translation state
 
 **States**:
-- Buttons: Hover shows slight scale (1.02) and brightness increase, active state scales down (0.98), disabled has 50% opacity with no-drop cursor
-- Inputs: Focus shows accent-colored ring with subtle glow, error state shows red ring with shake animation
+- Buttons: Hover shows slight scale (1.02) and brightness increase, active state scales down (0.98), disabled has 50% opacity with no-drop cursor, loading shows spinner
+- Inputs: Focus shows accent-colored ring with subtle glow, error state shows red ring with shake animation, disabled shows muted appearance
 - Messages: Sending shows opacity 0.6 with loading spinner, sent has full opacity, failed has red border with retry button
+- Auth form: Loading state during sign in/sign up shows disabled inputs and button spinner
 
 **Icon Selection**:
+- Authentication: Lock (password), EnvelopeSimple (email), User (name), SignOut (logout)
+- Organization: Folder/FolderOpen (categories), CaretRight/CaretDown (expand/collapse)
 - Chat/conversation: ChatCircle, ChatsTeardrop
 - Send message: PaperPlaneRight
 - PR actions: GitPullRequest, GitMerge, GitBranch
@@ -171,27 +204,32 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - File operations: File, FileText, FileDotted (pending changes)
 - Preview actions: Eye (view/preview), SplitVertical (split view), CaretLeft/CaretRight (navigation)
 - Translation: Translate (translate trigger), Info (tooltip indicators for explanations)
-- Navigation: List, CaretLeft/Right, MagnifyingGlass
+- Navigation: List, CaretLeft/Right, MagnifyingGlass, Plus (new chat)
 
 **Spacing**:
 - Container padding: p-6 (24px) for main content areas
-- Card padding: p-4 (16px) for internal card content
+- Card padding: p-4 (16px) for internal card content, p-3 (12px) for hierarchy items
 - Message spacing: gap-3 (12px) between consecutive messages, gap-6 (24px) between message groups
 - Section margins: mb-8 (32px) between major sections
 - Button padding: px-4 py-2 (16px horizontal, 8px vertical) for standard buttons
+- Auth form: max-w-md for card, space-y-4 for form fields
 
 **Mobile**:
+- ✅ Authentication form fully responsive with proper input sizing for mobile
+- ✅ New chat dialog adapts to mobile screen with full-width dropdowns
 - ✅ Sidebar collapses to Sheet drawer overlay on mobile (<768px)
+- ✅ Hierarchical navigation works with touch gestures for expand/collapse
 - ✅ Right panel (Changes/PRs/Activity) accessible via floating action button with Sheet drawer on mobile
 - ✅ Responsive header with adaptive sizing and hidden elements on small screens
 - ✅ Active users widget shows fewer avatars on mobile (3 vs 5 on desktop)
 - ✅ Message bubbles scale appropriately (85% max-width on mobile, 75% on desktop)
 - ✅ Touch-optimized input areas with appropriate sizing (50px on mobile, 60px on desktop)
 - ✅ Floating action button for Changes/PRs/Activity access on mobile
-- ✅ Dialogs (PR details, Create PR) adapt to mobile screen sizes
+- ✅ Dialogs (PR details, Create PR, New Chat) adapt to mobile screen sizes
 - ✅ Responsive typography: reduced font sizes and spacing on mobile
 - ✅ Single column layout on mobile with drawer-based navigation
 - ✅ Avatar and badge sizing adapts to screen size
 - ✅ Auto-close drawers after selection on mobile for better UX
 - ✅ Typing indicators and presence widgets fully responsive
 - ✅ Activity feed optimized for mobile with touch-friendly event cards
+- ✅ Sign out button accessible on mobile header
