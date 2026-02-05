@@ -11,10 +11,11 @@ interface FileDiffViewerProps {
   fileChanges: FileChange[]
   onAddLineComment?: (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
   onResolveComment?: (commentId: string) => void
+  onToggleReaction?: (commentId: string, emoji: string) => void
   currentUser?: User | null
 }
 
-export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment, currentUser }: FileDiffViewerProps) {
+export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment, onToggleReaction, currentUser }: FileDiffViewerProps) {
   const [previewFile, setPreviewFile] = useState<FileChange | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -26,6 +27,12 @@ export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment
   const handleAddLineComment = (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
     if (previewFile && onAddLineComment) {
       onAddLineComment(previewFile.path, lineNumber, lineType, content, parentId)
+    }
+  }
+
+  const handleToggleReaction = (commentId: string, emoji: string) => {
+    if (onToggleReaction) {
+      onToggleReaction(commentId, emoji)
     }
   }
   if (fileChanges.length === 0) {
@@ -107,6 +114,7 @@ export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment
         onClose={() => setPreviewOpen(false)}
         onAddLineComment={handleAddLineComment}
         onResolveComment={onResolveComment}
+        onToggleReaction={handleToggleReaction}
         currentUser={currentUser}
       />
     </>

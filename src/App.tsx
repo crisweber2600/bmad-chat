@@ -403,6 +403,120 @@ Format your response as JSON with this structure:
     toast.success('Comment resolved')
   }
 
+  const handleToggleLineCommentReaction = (prId: string, commentId: string, emoji: string) => {
+    if (!currentUser) return
+
+    setPullRequests((current) =>
+      (current || []).map((pr) => {
+        if (pr.id !== prId) return pr
+
+        return {
+          ...pr,
+          fileChanges: pr.fileChanges.map((file) => ({
+            ...file,
+            lineComments: (file.lineComments || []).map((comment) => {
+              if (comment.id === commentId) {
+                return toggleReactionOnComment(comment, emoji, currentUser)
+              }
+              if (comment.replies) {
+                return {
+                  ...comment,
+                  replies: comment.replies.map((reply) =>
+                    reply.id === commentId
+                      ? toggleReactionOnComment(reply, emoji, currentUser)
+                      : reply
+                  ),
+                }
+              }
+              return comment
+            }),
+          })),
+          updatedAt: Date.now(),
+        }
+      })
+    )
+  }
+
+  const handleTogglePendingLineCommentReaction = (commentId: string, emoji: string) => {
+    if (!currentUser) return
+
+    setPendingChanges((current) =>
+      (current || []).map((file) => ({
+        ...file,
+        lineComments: (file.lineComments || []).map((comment) => {
+          if (comment.id === commentId) {
+            return toggleReactionOnComment(comment, emoji, currentUser)
+          }
+          if (comment.replies) {
+            return {
+              ...comment,
+              replies: comment.replies.map((reply) =>
+                reply.id === commentId
+                  ? toggleReactionOnComment(reply, emoji, currentUser)
+                  : reply
+              ),
+            }
+          }
+          return comment
+        }),
+      }))
+    )
+  }
+
+  const toggleReactionOnComment = (comment: LineComment, emoji: string, user: User): LineComment => {
+    const reactions = comment.reactions || []
+    const existingReaction = reactions.find((r) => r.emoji === emoji)
+
+    if (existingReaction) {
+      const hasReacted = existingReaction.userIds.includes(user.id)
+      if (hasReacted) {
+        const updatedUserIds = existingReaction.userIds.filter((id) => id !== user.id)
+        const updatedUserNames = existingReaction.userNames.filter((name) => name !== user.name)
+        
+        if (updatedUserIds.length === 0) {
+          return {
+            ...comment,
+            reactions: reactions.filter((r) => r.emoji !== emoji),
+          }
+        }
+        
+        return {
+          ...comment,
+          reactions: reactions.map((r) =>
+            r.emoji === emoji
+              ? { ...r, userIds: updatedUserIds, userNames: updatedUserNames }
+              : r
+          ),
+        }
+      } else {
+        return {
+          ...comment,
+          reactions: reactions.map((r) =>
+            r.emoji === emoji
+              ? {
+                  ...r,
+                  userIds: [...r.userIds, user.id],
+                  userNames: [...r.userNames, user.name],
+                }
+              : r
+          ),
+        }
+      }
+    } else {
+      return {
+        ...comment,
+        reactions: [
+          ...reactions,
+          {
+            emoji,
+            userIds: [user.id],
+            userNames: [user.name],
+          },
+        ],
+      }
+    }
+  }
+
   const activeChatData = (chats || []).find((c) => c.id === activeChat)
   const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
   const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
@@ -598,6 +712,7 @@ Format your response as JSON with this structure:
                             fileChanges={pendingChanges || []}
                             onAddLineComment={handleAddPendingLineComment}
                             onResolveComment={handleResolvePendingLineComment}
+                            onToggleReaction={handleTogglePendingLineCommentReaction}
                             currentUser={currentUser}
                           />
                         </div>
@@ -710,6 +825,7 @@ Format your response as JSON with this structure:
                         fileChanges={pendingChanges || []}
                         onAddLineComment={handleAddPendingLineComment}
                         onResolveComment={handleResolvePendingLineComment}
+                        onToggleReaction={handleTogglePendingLineCommentReaction}
                         currentUser={currentUser}
                       />
                     </div>
@@ -798,6 +914,7 @@ Format your response as JSON with this structure:
         currentUser={currentUser}
         onAddLineComment={handleAddLineComment}
         onResolveLineComment={handleResolveLineComment}
+        onToggleReaction={handleToggleLineCommentReaction}
       />
 
       <CreatePRDialog

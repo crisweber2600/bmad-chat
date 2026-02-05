@@ -29,6 +29,7 @@ interface PRDialogProps {
   currentUser: User | null
   onAddLineComment?: (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
   onResolveLineComment?: (prId: string, commentId: string) => void
+  onToggleReaction?: (prId: string, commentId: string, emoji: string) => void
 }
 
 export function PRDialog({
@@ -42,6 +43,7 @@ export function PRDialog({
   currentUser,
   onAddLineComment,
   onResolveLineComment,
+  onToggleReaction,
 }: PRDialogProps) {
   const [comment, setComment] = useState('')
   const [showAllChanges, setShowAllChanges] = useState(true)
@@ -65,6 +67,12 @@ export function PRDialog({
   const handleResolveLineComment = (commentId: string) => {
     if (onResolveLineComment) {
       onResolveLineComment(pr.id, commentId)
+    }
+  }
+
+  const handleToggleReaction = (commentId: string, emoji: string) => {
+    if (onToggleReaction) {
+      onToggleReaction(pr.id, commentId, emoji)
     }
   }
 
@@ -123,6 +131,7 @@ export function PRDialog({
                   fileChanges={pr.fileChanges}
                   onAddLineComment={handleAddLineComment}
                   onResolveComment={handleResolveLineComment}
+                  onToggleReaction={handleToggleReaction}
                   currentUser={currentUser}
                 />
               )}
@@ -209,6 +218,7 @@ export function PRDialog({
         onClose={() => setAllFilesPreviewOpen(false)}
         onAddLineComment={handleAddLineComment}
         onResolveComment={handleResolveLineComment}
+        onToggleReaction={handleToggleReaction}
         currentUser={currentUser}
       />
     </Dialog>

@@ -8,10 +8,11 @@ interface AllFilesPreviewDialogProps {
   onClose: () => void
   onAddLineComment?: (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
   onResolveComment?: (commentId: string) => void
+  onToggleReaction?: (commentId: string, emoji: string) => void
   currentUser?: User | null
 }
 
-export function AllFilesPreviewDialog({ fileChanges, open, onClose, onAddLineComment, onResolveComment, currentUser }: AllFilesPreviewDialogProps) {
+export function AllFilesPreviewDialog({ fileChanges, open, onClose, onAddLineComment, onResolveComment, onToggleReaction, currentUser }: AllFilesPreviewDialogProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -49,6 +50,7 @@ export function AllFilesPreviewDialog({ fileChanges, open, onClose, onAddLineCom
       onClose={handleClosePreview}
       onAddLineComment={handleAddLineComment}
       onResolveComment={onResolveComment}
+      onToggleReaction={onToggleReaction}
       currentUser={currentUser}
     />
   )

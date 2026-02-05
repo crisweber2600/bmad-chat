@@ -21,10 +21,11 @@ interface FilePreviewDialogProps {
   onClose: () => void
   onAddLineComment?: (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
   onResolveComment?: (commentId: string) => void
+  onToggleReaction?: (commentId: string, emoji: string) => void
   currentUser?: User | null
 }
 
-export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment, onResolveComment, currentUser }: FilePreviewDialogProps) {
+export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment, onResolveComment, onToggleReaction, currentUser }: FilePreviewDialogProps) {
   const [viewMode, setViewMode] = useState<'unified' | 'split' | 'before' | 'after'>('unified')
   const [activeCommentLine, setActiveCommentLine] = useState<{ line: number; type: 'addition' | 'deletion' | 'unchanged' } | null>(null)
   const [hoveredLine, setHoveredLine] = useState<number | null>(null)
@@ -53,6 +54,12 @@ export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment,
   const handleResolveComment = (commentId: string) => {
     if (onResolveComment) {
       onResolveComment(commentId)
+    }
+  }
+
+  const handleToggleReaction = (commentId: string, emoji: string) => {
+    if (onToggleReaction) {
+      onToggleReaction(commentId, emoji)
     }
   }
 
@@ -139,8 +146,8 @@ export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment,
                     onAddComment={handleSubmitComment}
                     onResolve={handleResolveComment}
                     onClose={() => setActiveCommentLine(null)}
-                    currentUserName={currentUser.name}
-                    currentUserAvatar={currentUser.avatarUrl}
+                    currentUser={currentUser}
+                    onToggleReaction={handleToggleReaction}
                   />
                 </div>
               )}
@@ -219,8 +226,8 @@ export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment,
                         onAddComment={handleSubmitComment}
                         onResolve={handleResolveComment}
                         onClose={() => setActiveCommentLine(null)}
-                        currentUserName={currentUser.name}
-                        currentUserAvatar={currentUser.avatarUrl}
+                        currentUser={currentUser}
+                        onToggleReaction={handleToggleReaction}
                       />
                     </div>
                   )}
@@ -298,8 +305,8 @@ export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment,
                         onAddComment={handleSubmitComment}
                         onResolve={handleResolveComment}
                         onClose={() => setActiveCommentLine(null)}
-                        currentUserName={currentUser.name}
-                        currentUserAvatar={currentUser.avatarUrl}
+                        currentUser={currentUser}
+                        onToggleReaction={handleToggleReaction}
                       />
                     </div>
                   )}

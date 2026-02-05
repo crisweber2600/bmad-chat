@@ -32,6 +32,12 @@ export interface Message {
   fileChanges?: FileChange[]
 }
 
+export interface EmojiReaction {
+  emoji: string
+  userIds: string[]
+  userNames: string[]
+}
+
 export interface LineComment {
   id: string
   fileId: string
@@ -43,6 +49,7 @@ export interface LineComment {
   timestamp: number
   resolved: boolean
   replies?: LineComment[]
+  reactions?: EmojiReaction[]
 }
 
 export interface FileChange {
