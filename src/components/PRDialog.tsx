@@ -27,6 +27,8 @@ interface PRDialogProps {
   onComment: (prId: string, comment: string) => void
   onApprove: (prId: string) => void
   currentUser: User | null
+  onAddLineComment?: (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
+  onResolveLineComment?: (prId: string, commentId: string) => void
 }
 
 export function PRDialog({
@@ -38,6 +40,8 @@ export function PRDialog({
   onComment,
   onApprove,
   currentUser,
+  onAddLineComment,
+  onResolveLineComment,
 }: PRDialogProps) {
   const [comment, setComment] = useState('')
   const [showAllChanges, setShowAllChanges] = useState(true)
@@ -49,6 +53,18 @@ export function PRDialog({
     if (comment.trim()) {
       onComment(pr.id, comment.trim())
       setComment('')
+    }
+  }
+
+  const handleAddLineComment = (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+    if (onAddLineComment) {
+      onAddLineComment(pr.id, fileId, lineNumber, lineType, content, parentId)
+    }
+  }
+
+  const handleResolveLineComment = (commentId: string) => {
+    if (onResolveLineComment) {
+      onResolveLineComment(pr.id, commentId)
     }
   }
 
@@ -102,7 +118,14 @@ export function PRDialog({
                   </Button>
                 </div>
               </div>
-              {showAllChanges && <FileDiffViewer fileChanges={pr.fileChanges} />}
+              {showAllChanges && (
+                <FileDiffViewer 
+                  fileChanges={pr.fileChanges}
+                  onAddLineComment={handleAddLineComment}
+                  onResolveComment={handleResolveLineComment}
+                  currentUser={currentUser}
+                />
+              )}
             </div>
 
             <Separator />
@@ -184,6 +207,9 @@ export function PRDialog({
         fileChanges={pr.fileChanges}
         open={allFilesPreviewOpen}
         onClose={() => setAllFilesPreviewOpen(false)}
+        onAddLineComment={handleAddLineComment}
+        onResolveComment={handleResolveLineComment}
+        currentUser={currentUser}
       />
     </Dialog>
   )

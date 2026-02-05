@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useKV } from '@github/spark/hooks'
-import { Chat, Message, PullRequest, User, FileChange } from '@/lib/types'
+import { Chat, Message, PullRequest, User, FileChange, LineComment } from '@/lib/types'
 import { useCollaboration } from '@/hooks/use-collaboration'
 import { ChatList } from '@/components/ChatList'
 import { ChatMessage } from '@/components/ChatMessage'
@@ -268,6 +268,141 @@ Format your response as JSON with this structure:
     )
   }
 
+  const handleAddLineComment = (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+    if (!currentUser) return
+
+    const newComment: LineComment = {
+      id: `line-comment-${Date.now()}`,
+      fileId,
+      lineNumber,
+      lineType,
+      author: currentUser.name,
+      authorAvatar: currentUser.avatarUrl,
+      content,
+      timestamp: Date.now(),
+      resolved: false,
+    }
+
+    setPullRequests((current) =>
+      (current || []).map((pr) => {
+        if (pr.id !== prId) return pr
+
+        return {
+          ...pr,
+          fileChanges: pr.fileChanges.map((file) => {
+            if (file.path !== fileId) return file
+
+            if (parentId) {
+              return {
+                ...file,
+                lineComments: (file.lineComments || []).map((comment) => {
+                  if (comment.id === parentId) {
+                    return {
+                      ...comment,
+                      replies: [...(comment.replies || []), newComment],
+                    }
+                  }
+                  return comment
+                }),
+              }
+            }
+
+            return {
+              ...file,
+              lineComments: [...(file.lineComments || []), newComment],
+            }
+          }),
+          updatedAt: Date.now(),
+        }
+      })
+    )
+
+    toast.success('Comment added')
+    broadcastEvent('pr_updated', { prId, action: 'comment_added' })
+  }
+
+  const handleResolveLineComment = (prId: string, commentId: string) => {
+    setPullRequests((current) =>
+      (current || []).map((pr) => {
+        if (pr.id !== prId) return pr
+
+        return {
+          ...pr,
+          fileChanges: pr.fileChanges.map((file) => ({
+            ...file,
+            lineComments: (file.lineComments || []).map((comment) =>
+              comment.id === commentId
+                ? { ...comment, resolved: true }
+                : comment
+            ),
+          })),
+          updatedAt: Date.now(),
+        }
+      })
+    )
+
+    toast.success('Comment resolved')
+  }
+
+  const handleAddPendingLineComment = (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+    if (!currentUser) return
+
+    const newComment: LineComment = {
+      id: `line-comment-${Date.now()}`,
+      fileId,
+      lineNumber,
+      lineType,
+      author: currentUser.name,
+      authorAvatar: currentUser.avatarUrl,
+      content,
+      timestamp: Date.now(),
+      resolved: false,
+    }
+
+    setPendingChanges((current) =>
+      (current || []).map((file) => {
+        if (file.path !== fileId) return file
+
+        if (parentId) {
+          return {
+            ...file,
+            lineComments: (file.lineComments || []).map((comment) => {
+              if (comment.id === parentId) {
+                return {
+                  ...comment,
+                  replies: [...(comment.replies || []), newComment],
+                }
+              }
+              return comment
+            }),
+          }
+        }
+
+        return {
+          ...file,
+          lineComments: [...(file.lineComments || []), newComment],
+        }
+      })
+    )
+
+    toast.success('Comment added')
+  }
+
+  const handleResolvePendingLineComment = (commentId: string) => {
+    setPendingChanges((current) =>
+      (current || []).map((file) => ({
+        ...file,
+        lineComments: (file.lineComments || []).map((comment) =>
+          comment.id === commentId
+            ? { ...comment, resolved: true }
+            : comment
+        ),
+      }))
+    )
+
+    toast.success('Comment resolved')
+  }
+
   const activeChatData = (chats || []).find((c) => c.id === activeChat)
   const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
   const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
@@ -459,7 +594,12 @@ Format your response as JSON with this structure:
                       <div className="space-y-4">
                         <div>
                           <h3 className="font-semibold mb-3">Pending Changes</h3>
-                          <FileDiffViewer fileChanges={pendingChanges || []} />
+                          <FileDiffViewer 
+                            fileChanges={pendingChanges || []}
+                            onAddLineComment={handleAddPendingLineComment}
+                            onResolveComment={handleResolvePendingLineComment}
+                            currentUser={currentUser}
+                          />
                         </div>
                         
                         {(pendingChanges || []).length > 0 && (
@@ -566,7 +706,12 @@ Format your response as JSON with this structure:
                   <div className="space-y-4">
                     <div>
                       <h3 className="font-semibold mb-3">Pending Changes</h3>
-                      <FileDiffViewer fileChanges={pendingChanges || []} />
+                      <FileDiffViewer 
+                        fileChanges={pendingChanges || []}
+                        onAddLineComment={handleAddPendingLineComment}
+                        onResolveComment={handleResolvePendingLineComment}
+                        currentUser={currentUser}
+                      />
                     </div>
                     
                     {(pendingChanges || []).length > 0 && (
@@ -651,6 +796,8 @@ Format your response as JSON with this structure:
         onApprove={handleApprovePR}
         onComment={handleCommentPR}
         currentUser={currentUser}
+        onAddLineComment={handleAddLineComment}
+        onResolveLineComment={handleResolveLineComment}
       />
 
       <CreatePRDialog

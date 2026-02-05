@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileChange } from '@/lib/types'
+import { FileChange, LineComment, User } from '@/lib/types'
 import {
   Dialog,
   DialogContent,
@@ -11,56 +11,142 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { FileText, SplitVertical, Eye } from '@phosphor-icons/react'
+import { FileText, SplitVertical, Eye, ChatCircle, Plus } from '@phosphor-icons/react'
 import { cn } from '@/lib/utils'
+import { InlineCommentThread } from './InlineCommentThread'
 
 interface FilePreviewDialogProps {
   fileChange: FileChange | null
   open: boolean
   onClose: () => void
+  onAddLineComment?: (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
+  onResolveComment?: (commentId: string) => void
+  currentUser?: User | null
 }
 
-export function FilePreviewDialog({ fileChange, open, onClose }: FilePreviewDialogProps) {
+export function FilePreviewDialog({ fileChange, open, onClose, onAddLineComment, onResolveComment, currentUser }: FilePreviewDialogProps) {
   const [viewMode, setViewMode] = useState<'unified' | 'split' | 'before' | 'after'>('unified')
+  const [activeCommentLine, setActiveCommentLine] = useState<{ line: number; type: 'addition' | 'deletion' | 'unchanged' } | null>(null)
+  const [hoveredLine, setHoveredLine] = useState<number | null>(null)
 
   if (!fileChange) return null
 
   const beforeContent = fileChange.deletions
   const afterContent = fileChange.additions
   const hasChanges = beforeContent.length > 0 || afterContent.length > 0
+  const lineComments = fileChange.lineComments || []
+
+  const getCommentsForLine = (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged') => {
+    return lineComments.filter(c => c.lineNumber === lineNumber && c.lineType === lineType)
+  }
+
+  const handleAddComment = (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged') => {
+    setActiveCommentLine({ line: lineNumber, type: lineType })
+  }
+
+  const handleSubmitComment = (content: string, parentId?: string) => {
+    if (activeCommentLine && onAddLineComment) {
+      onAddLineComment(activeCommentLine.line, activeCommentLine.type, content, parentId)
+    }
+  }
+
+  const handleResolveComment = (commentId: string) => {
+    if (onResolveComment) {
+      onResolveComment(commentId)
+    }
+  }
 
   const renderUnifiedView = () => {
-    const allLines: Array<{ content: string; type: 'deletion' | 'addition' | 'unchanged' }> = []
+    const allLines: Array<{ content: string; type: 'deletion' | 'addition' | 'unchanged'; lineNumber: number }> = []
     
+    let lineCounter = 0
     beforeContent.forEach(line => {
-      allLines.push({ content: line, type: 'deletion' })
+      lineCounter++
+      allLines.push({ content: line, type: 'deletion', lineNumber: lineCounter })
     })
     
     afterContent.forEach(line => {
-      allLines.push({ content: line, type: 'addition' })
+      lineCounter++
+      allLines.push({ content: line, type: 'addition', lineNumber: lineCounter })
     })
 
     return (
       <div className="font-mono text-xs leading-relaxed">
-        {allLines.map((line, idx) => (
-          <div
-            key={idx}
-            className={cn(
-              'px-3 py-1 border-l-2',
-              line.type === 'deletion' && 'bg-red-50/50 border-red-400 text-red-900',
-              line.type === 'addition' && 'bg-green-50/50 border-green-400 text-green-900',
-              line.type === 'unchanged' && 'bg-background border-border'
-            )}
-          >
-            <span className={cn(
-              'inline-block w-8 select-none mr-3',
-              line.type === 'deletion' ? 'text-red-500' : line.type === 'addition' ? 'text-green-500' : 'text-muted-foreground'
-            )}>
-              {line.type === 'deletion' ? '-' : line.type === 'addition' ? '+' : ' '}
-            </span>
-            <span className="break-all">{line.content}</span>
-          </div>
-        ))}
+        {allLines.map((line, idx) => {
+          const comments = getCommentsForLine(line.lineNumber, line.type)
+          const hasComments = comments.length > 0
+          const isCommentOpen = activeCommentLine?.line === line.lineNumber && activeCommentLine?.type === line.type
+          const isHovered = hoveredLine === idx
+
+          return (
+            <div key={idx}>
+              <div
+                className={cn(
+                  'px-3 py-1.5 border-l-2 group relative flex items-center gap-2',
+                  line.type === 'deletion' && 'bg-red-50/50 border-red-400 text-red-900',
+                  line.type === 'addition' && 'bg-green-50/50 border-green-400 text-green-900',
+                  line.type === 'unchanged' && 'bg-background border-border',
+                  (hasComments || isCommentOpen) && 'border-l-4'
+                )}
+                onMouseEnter={() => setHoveredLine(idx)}
+                onMouseLeave={() => setHoveredLine(null)}
+              >
+                <span className={cn(
+                  'inline-block w-8 select-none',
+                  line.type === 'deletion' ? 'text-red-500' : line.type === 'addition' ? 'text-green-500' : 'text-muted-foreground'
+                )}>
+                  {line.type === 'deletion' ? '-' : line.type === 'addition' ? '+' : ' '}
+                </span>
+                <span className="inline-block w-10 select-none text-muted-foreground text-right">
+                  {line.lineNumber}
+                </span>
+                <span className="break-all flex-1">{line.content}</span>
+                
+                {onAddLineComment && currentUser && (isHovered || hasComments) && (
+                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                    {hasComments && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddComment(line.lineNumber, line.type)}
+                        className="h-6 px-2 text-xs"
+                      >
+                        <ChatCircle size={14} weight="fill" className="text-primary" />
+                        <span className="ml-1">{comments.length}</span>
+                      </Button>
+                    )}
+                    {!hasComments && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAddComment(line.lineNumber, line.type)}
+                        className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Plus size={14} weight="bold" />
+                        <ChatCircle size={14} className="ml-1" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {isCommentOpen && currentUser && (
+                <div className="px-3 py-3 bg-muted/30 border-b">
+                  <InlineCommentThread
+                    comments={comments}
+                    lineNumber={line.lineNumber}
+                    lineType={line.type}
+                    onAddComment={handleSubmitComment}
+                    onResolve={handleResolveComment}
+                    onClose={() => setActiveCommentLine(null)}
+                    currentUserName={currentUser.name}
+                    currentUserAvatar={currentUser.avatarUrl}
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     )
   }
@@ -71,17 +157,76 @@ export function FilePreviewDialog({ fileChange, open, onClose }: FilePreviewDial
     return (
       <div className="grid grid-cols-2 gap-px bg-border">
         <div className="bg-background">
-          <div className="sticky top-0 bg-red-50 border-b border-red-200 px-3 py-2 font-semibold text-xs text-red-900 flex items-center gap-2">
+          <div className="sticky top-0 bg-red-50 border-b border-red-200 px-3 py-2 font-semibold text-xs text-red-900 flex items-center gap-2 z-10">
             <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">Before</Badge>
             <span className="text-muted-foreground ml-auto">{beforeContent.length} lines</span>
           </div>
           <div className="font-mono text-xs">
-            {beforeContent.map((line, idx) => (
-              <div key={idx} className="px-3 py-1 bg-red-50/30 border-l-2 border-red-300">
-                <span className="inline-block w-8 select-none mr-3 text-red-400">{idx + 1}</span>
-                <span className="text-red-900 break-all">{line}</span>
-              </div>
-            ))}
+            {beforeContent.map((line, idx) => {
+              const lineNumber = idx + 1
+              const comments = getCommentsForLine(lineNumber, 'deletion')
+              const hasComments = comments.length > 0
+              const isCommentOpen = activeCommentLine?.line === lineNumber && activeCommentLine?.type === 'deletion'
+              const isHovered = hoveredLine === idx
+
+              return (
+                <div key={idx}>
+                  <div
+                    className={cn(
+                      'px-3 py-1.5 bg-red-50/30 border-l-2 border-red-300 group relative flex items-center gap-2',
+                      (hasComments || isCommentOpen) && 'border-l-4'
+                    )}
+                    onMouseEnter={() => setHoveredLine(idx)}
+                    onMouseLeave={() => setHoveredLine(null)}
+                  >
+                    <span className="inline-block w-8 select-none text-red-400">{lineNumber}</span>
+                    <span className="text-red-900 break-all flex-1">{line}</span>
+                    
+                    {onAddLineComment && currentUser && (isHovered || hasComments) && (
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        {hasComments && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddComment(lineNumber, 'deletion')}
+                            className="h-6 px-2 text-xs"
+                          >
+                            <ChatCircle size={14} weight="fill" className="text-primary" />
+                            <span className="ml-1">{comments.length}</span>
+                          </Button>
+                        )}
+                        {!hasComments && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddComment(lineNumber, 'deletion')}
+                            className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Plus size={14} weight="bold" />
+                            <ChatCircle size={14} className="ml-1" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {isCommentOpen && currentUser && (
+                    <div className="px-3 py-3 bg-muted/30 border-b">
+                      <InlineCommentThread
+                        comments={comments}
+                        lineNumber={lineNumber}
+                        lineType="deletion"
+                        onAddComment={handleSubmitComment}
+                        onResolve={handleResolveComment}
+                        onClose={() => setActiveCommentLine(null)}
+                        currentUserName={currentUser.name}
+                        currentUserAvatar={currentUser.avatarUrl}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             {beforeContent.length === 0 && (
               <div className="px-3 py-8 text-center text-muted-foreground text-xs">
                 No content before changes
@@ -91,17 +236,76 @@ export function FilePreviewDialog({ fileChange, open, onClose }: FilePreviewDial
         </div>
 
         <div className="bg-background">
-          <div className="sticky top-0 bg-green-50 border-b border-green-200 px-3 py-2 font-semibold text-xs text-green-900 flex items-center gap-2">
+          <div className="sticky top-0 bg-green-50 border-b border-green-200 px-3 py-2 font-semibold text-xs text-green-900 flex items-center gap-2 z-10">
             <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">After</Badge>
             <span className="text-muted-foreground ml-auto">{afterContent.length} lines</span>
           </div>
           <div className="font-mono text-xs">
-            {afterContent.map((line, idx) => (
-              <div key={idx} className="px-3 py-1 bg-green-50/30 border-l-2 border-green-300">
-                <span className="inline-block w-8 select-none mr-3 text-green-400">{idx + 1}</span>
-                <span className="text-green-900 break-all">{line}</span>
-              </div>
-            ))}
+            {afterContent.map((line, idx) => {
+              const lineNumber = idx + 1
+              const comments = getCommentsForLine(lineNumber, 'addition')
+              const hasComments = comments.length > 0
+              const isCommentOpen = activeCommentLine?.line === lineNumber && activeCommentLine?.type === 'addition'
+              const isHovered = hoveredLine === (beforeContent.length + idx)
+
+              return (
+                <div key={idx}>
+                  <div
+                    className={cn(
+                      'px-3 py-1.5 bg-green-50/30 border-l-2 border-green-300 group relative flex items-center gap-2',
+                      (hasComments || isCommentOpen) && 'border-l-4'
+                    )}
+                    onMouseEnter={() => setHoveredLine(beforeContent.length + idx)}
+                    onMouseLeave={() => setHoveredLine(null)}
+                  >
+                    <span className="inline-block w-8 select-none text-green-400">{lineNumber}</span>
+                    <span className="text-green-900 break-all flex-1">{line}</span>
+                    
+                    {onAddLineComment && currentUser && (isHovered || hasComments) && (
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        {hasComments && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddComment(lineNumber, 'addition')}
+                            className="h-6 px-2 text-xs"
+                          >
+                            <ChatCircle size={14} weight="fill" className="text-primary" />
+                            <span className="ml-1">{comments.length}</span>
+                          </Button>
+                        )}
+                        {!hasComments && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAddComment(lineNumber, 'addition')}
+                            className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <Plus size={14} weight="bold" />
+                            <ChatCircle size={14} className="ml-1" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {isCommentOpen && currentUser && (
+                    <div className="px-3 py-3 bg-muted/30 border-b">
+                      <InlineCommentThread
+                        comments={comments}
+                        lineNumber={lineNumber}
+                        lineType="addition"
+                        onAddComment={handleSubmitComment}
+                        onResolve={handleResolveComment}
+                        onClose={() => setActiveCommentLine(null)}
+                        currentUserName={currentUser.name}
+                        currentUserAvatar={currentUser.avatarUrl}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
             {afterContent.length === 0 && (
               <div className="px-3 py-8 text-center text-muted-foreground text-xs">
                 No content after changes

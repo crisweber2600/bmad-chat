@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileChange } from '@/lib/types'
+import { FileChange, User } from '@/lib/types'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -9,15 +9,24 @@ import { FilePreviewDialog } from './FilePreviewDialog'
 
 interface FileDiffViewerProps {
   fileChanges: FileChange[]
+  onAddLineComment?: (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => void
+  onResolveComment?: (commentId: string) => void
+  currentUser?: User | null
 }
 
-export function FileDiffViewer({ fileChanges }: FileDiffViewerProps) {
+export function FileDiffViewer({ fileChanges, onAddLineComment, onResolveComment, currentUser }: FileDiffViewerProps) {
   const [previewFile, setPreviewFile] = useState<FileChange | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
   const handlePreview = (change: FileChange) => {
     setPreviewFile(change)
     setPreviewOpen(true)
+  }
+
+  const handleAddLineComment = (lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+    if (previewFile && onAddLineComment) {
+      onAddLineComment(previewFile.path, lineNumber, lineType, content, parentId)
+    }
   }
   if (fileChanges.length === 0) {
     return (
@@ -96,6 +105,9 @@ export function FileDiffViewer({ fileChanges }: FileDiffViewerProps) {
         fileChange={previewFile}
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
+        onAddLineComment={handleAddLineComment}
+        onResolveComment={onResolveComment}
+        currentUser={currentUser}
       />
     </>
   )

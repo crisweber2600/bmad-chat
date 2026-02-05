@@ -32,11 +32,25 @@ export interface Message {
   fileChanges?: FileChange[]
 }
 
+export interface LineComment {
+  id: string
+  fileId: string
+  lineNumber: number
+  lineType: 'addition' | 'deletion' | 'unchanged'
+  author: string
+  authorAvatar: string
+  content: string
+  timestamp: number
+  resolved: boolean
+  replies?: LineComment[]
+}
+
 export interface FileChange {
   path: string
   additions: string[]
   deletions: string[]
   status: 'pending' | 'staged' | 'committed'
+  lineComments?: LineComment[]
 }
 
 export interface Chat {
