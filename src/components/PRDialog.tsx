@@ -13,8 +13,9 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { GitMerge, CheckCircle, XCircle, User as UserIcon } from '@phosphor-icons/react'
+import { GitMerge, CheckCircle, XCircle, User as UserIcon, Eye, FileText } from '@phosphor-icons/react'
 import { FileDiffViewer } from './FileDiffViewer'
+import { AllFilesPreviewDialog } from './AllFilesPreviewDialog'
 import { cn } from '@/lib/utils'
 
 interface PRDialogProps {
@@ -39,6 +40,8 @@ export function PRDialog({
   currentUser,
 }: PRDialogProps) {
   const [comment, setComment] = useState('')
+  const [showAllChanges, setShowAllChanges] = useState(true)
+  const [allFilesPreviewOpen, setAllFilesPreviewOpen] = useState(false)
 
   if (!pr) return null
 
@@ -76,8 +79,30 @@ export function PRDialog({
         <ScrollArea className="flex-1 pr-2 sm:pr-4">
           <div className="space-y-4 sm:space-y-6">
             <div>
-              <h3 className="font-semibold mb-2 sm:mb-3 text-sm sm:text-base">File Changes</h3>
-              <FileDiffViewer fileChanges={pr.fileChanges} />
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <h3 className="font-semibold text-sm sm:text-base">File Changes ({pr.fileChanges.length})</h3>
+                <div className="flex gap-2">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setAllFilesPreviewOpen(true)}
+                    className="h-8 text-xs"
+                  >
+                    <FileText size={14} className="mr-1.5" />
+                    Preview All
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAllChanges(!showAllChanges)}
+                    className="h-8 text-xs"
+                  >
+                    <Eye size={14} className="mr-1.5" />
+                    {showAllChanges ? 'Hide' : 'Show'}
+                  </Button>
+                </div>
+              </div>
+              {showAllChanges && <FileDiffViewer fileChanges={pr.fileChanges} />}
             </div>
 
             <Separator />
@@ -154,6 +179,12 @@ export function PRDialog({
           </div>
         )}
       </DialogContent>
+
+      <AllFilesPreviewDialog
+        fileChanges={pr.fileChanges}
+        open={allFilesPreviewOpen}
+        onClose={() => setAllFilesPreviewOpen(false)}
+      />
     </Dialog>
   )
 }

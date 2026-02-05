@@ -36,11 +36,11 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: File changes are accurate representations of conversation, diffs are clearly visible, multiple files can be changed in one conversation
 
 ### Integrated Pull Request Workflow
-- **Functionality**: Complete PR creation, review, and merge process within the app interface
-- **Purpose**: Remove friction from documentation updates by keeping the entire workflow in one place
+- **Functionality**: Complete PR creation, review, and merge process within the app interface with comprehensive file preview capabilities
+- **Purpose**: Remove friction from documentation updates by keeping the entire workflow in one place with detailed before/after file comparisons
 - **Trigger**: User clicks "Create PR" after reviewing staged changes
-- **Progression**: Changes staged → User creates PR with title/description → PR appears in PR list → Reviewers comment/approve → Changes merged or requested → Conversation continues
-- **Success criteria**: PRs create successfully, review comments thread properly, merge operations work, PR status updates in real-time
+- **Progression**: Changes staged → User creates PR with title/description → User can preview individual files or all files at once → Multiple view modes (unified/split/before/after) → PR appears in PR list → Reviewers preview changes with full file context → Reviewers comment/approve → Changes merged or requested → Conversation continues
+- **Success criteria**: PRs create successfully, file previews show accurate before/after states, unified and split view modes work correctly, review comments thread properly, merge operations work, PR status updates in real-time, preview navigation between files is seamless
 
 ### Persistent Chat History
 - **Functionality**: All conversations are saved and searchable across sessions using Spark KV store
@@ -58,6 +58,14 @@ This application requires sophisticated state management across multiple chat se
 - **Success criteria**: Presence updates within 2 seconds, typing indicators appear immediately, active user avatars display with pulsing animation, activity feed shows chronological events, stale presence cleaned up after 30 seconds of inactivity
 - **Backend Integration**: ✅ Uses window.spark.kv for presence data and collaboration events storage, custom polling mechanism for real-time updates, collaborative service manages presence heartbeat every 5 seconds
 
+### File Preview for Documentation Changes
+- **Functionality**: Comprehensive file preview system showing full context of documentation changes with multiple view modes before merging PRs
+- **Purpose**: Enable thorough review of changes with complete file context, reducing merge errors and improving review quality
+- **Trigger**: User clicks preview button on individual file or "Preview All" for all files in a PR
+- **Progression**: User reviewing changes → Clicks preview → Modal opens showing file content → User can toggle between unified view (inline diff), split view (side-by-side), before-only view, or after-only view → For multiple files, navigation arrows and file tabs allow switching between files → User reviews with full context → Closes preview and proceeds with PR workflow
+- **Success criteria**: Previews open instantly, view modes switch smoothly, line numbers display correctly, syntax highlighting for markdown, additions/deletions clearly color-coded (green/red), navigation between multiple files works seamlessly, mobile-responsive layout adapts preview to smaller screens
+- **Backend Integration**: ✅ Uses existing FileChange type from types.ts, operates on staged changes stored in component state
+
 ## Edge Case Handling
 
 - **Concurrent Edits**: When multiple users modify the same markdown file simultaneously, show merge conflict indicators and allow manual resolution
@@ -69,6 +77,8 @@ This application requires sophisticated state management across multiple chat se
 - **Stale Presence Data**: Automatic cleanup of user presence after 30 seconds of inactivity to prevent ghost users in collaboration indicators
 - **Race Conditions**: Proper state management using functional updates to prevent data loss when multiple events occur simultaneously
 - **Presence Polling Failures**: Service continues to attempt reconnection, users remain visible with last known state until timeout
+- **Empty File Changes**: Preview dialogs gracefully handle files with no additions or deletions, showing appropriate empty state messages
+- **Single File Navigation**: Preview navigation UI adapts when only one file is present, hiding unnecessary navigation controls
 
 ## Design Direction
 
@@ -112,12 +122,12 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - **ScrollArea**: For chat message history and file diff viewing
 - **Avatar**: User profile pictures with role badges (technical/business), also used for presence indicators with pulsing active status
 - **Card**: PR cards, file change preview cards
-- **Dialog**: PR creation modal, merge confirmation dialogs
+- **Dialog**: PR creation modal, merge confirmation dialogs, file preview modals with multi-view support
 - **Textarea**: Chat message input with auto-resize and typing detection
 - **Button**: Primary (send message, create PR), Secondary (cancel, view details), Destructive (close PR)
-- **Badge**: Role indicators, PR status, file change counts, active user counts
+- **Badge**: Role indicators, PR status, file change counts, active user counts, file stats (additions/deletions)
 - **Separator**: Visual breaks between chat sections and PR items
-- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"
+- **Tabs**: Switch between "Active Chats", "PR Queue", "Merged History", and "Activity Feed"; also used for view mode switching in file preview
 - **Accordion**: Expandable file diffs within PR view
 - **Alert**: System notifications for merge conflicts, AI errors
 - **Tooltip**: Display user names and status on hover of presence avatars
@@ -126,6 +136,8 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 **Customizations**:
 - **Message Bubbles**: Custom component with user/AI differentiation (user messages aligned right with accent background, AI messages left with muted background)
 - **Diff Viewer**: Syntax-highlighted markdown diff component showing additions/deletions with line numbers
+- **File Preview Dialog**: Full-screen modal with multiple view modes (unified, split, before-only, after-only), line numbers, color-coded changes, navigation between files
+- **All Files Preview**: Multi-file preview with file navigation arrows, quick file selector tabs, and persistent view mode selection across files
 - **PR Timeline**: Custom component showing comment threads, approvals, and status changes chronologically
 - **Active Users Widget**: Overlapping avatar stack with pulsing presence indicators, hover tooltips showing user names and typing status
 - **Typing Indicator**: Animated dots with user avatars showing who is currently typing
@@ -144,6 +156,7 @@ Animations should reinforce the conversational flow, real-time collaboration cue
 - Collaboration: UserPlus (join), UserMinus (leave), PencilSimple (typing), Circle (online status)
 - Activity: ChartLine (activity feed), CheckCircle (approved), XCircle (rejected), Clock (pending)
 - File operations: File, FileText, FileDotted (pending changes)
+- Preview actions: Eye (view/preview), SplitVertical (split view), CaretLeft/CaretRight (navigation)
 - Navigation: List, CaretLeft/Right, MagnifyingGlass
 
 **Spacing**:

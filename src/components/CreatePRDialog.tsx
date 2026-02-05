@@ -13,7 +13,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { FileDiffViewer } from './FileDiffViewer'
+import { AllFilesPreviewDialog } from './AllFilesPreviewDialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { FileText } from '@phosphor-icons/react'
 
 interface CreatePRDialogProps {
   open: boolean
@@ -30,6 +32,7 @@ export function CreatePRDialog({
 }: CreatePRDialogProps) {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [allFilesPreviewOpen, setAllFilesPreviewOpen] = useState(false)
 
   const handleCreate = () => {
     if (title.trim()) {
@@ -75,7 +78,18 @@ export function CreatePRDialog({
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm">File Changes ({fileChanges.length})</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">File Changes ({fileChanges.length})</Label>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAllFilesPreviewOpen(true)}
+                  className="h-8 text-xs"
+                >
+                  <FileText size={14} className="mr-1.5" />
+                  Preview All
+                </Button>
+              </div>
               <FileDiffViewer fileChanges={fileChanges} />
             </div>
           </div>
@@ -90,6 +104,12 @@ export function CreatePRDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <AllFilesPreviewDialog
+        fileChanges={fileChanges}
+        open={allFilesPreviewOpen}
+        onClose={() => setAllFilesPreviewOpen(false)}
+      />
     </Dialog>
   )
 }
