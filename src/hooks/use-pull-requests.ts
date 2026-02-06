@@ -1,138 +1,164 @@
-import { useKV } from '@github/spark/hooks'
+import { useEffect, useState } from 'react'
 import { PullRequest, User, FileChange } from '@/lib/types'
-import { PRService, LineCommentService } from '@/lib/services'
+import { apiRequest } from '@/lib/api'
 import { toast } from 'sonner'
 
-export function usePullRequests() {
-  const [pullRequests, setPullRequests] = useKV<PullRequest[]>('pull-requests', [])
+interface PullRequestListPayload {
+  pullRequests: PullRequest[]
+  total: number
+  limit: number
+  offset: number
+}
 
-  const createPR = (
+export function usePullRequests() {
+  const [pullRequests, setPullRequests] = useState<PullRequest[]>([])
+
+  useEffect(() => {
+    const loadPullRequests = async () => {
+      try {
+        const payload = await apiRequest<PullRequestListPayload>('/v1/pull-requests')
+        setPullRequests(payload.pullRequests || [])
+      } catch (error) {
+        console.error('Failed to load pull requests:', error)
+      }
+    }
+
+    loadPullRequests()
+  }, [])
+
+  const createPR = async (
     title: string,
     description: string,
     chatId: string,
-    currentUser: User,
+    _currentUser: User,
     pendingChanges: FileChange[],
-    onBroadcast?: (type: string, metadata: any) => void
+    onBroadcast?: (type: string, metadata: any) => Promise<void> | void
   ) => {
-    const newPR = PRService.createPR(title, description, chatId, currentUser, pendingChanges)
-    setPullRequests((current) => [newPR, ...(current || [])])
-    
+    const newPR = await apiRequest<PullRequest>('/v1/pull-requests', {
+      method: 'POST',
+      body: {
+        title,
+        description,
+        chatId,
+        fileChanges: pendingChanges,
+      },
+    })
+
+    setPullRequests((current) => [newPR, ...current])
     if (onBroadcast) {
-      onBroadcast('pr_created', { prId: newPR.id, title })
+      await onBroadcast('pr_created', { prId: newPR.id, title })
     }
-    
+
     toast.success('Pull request created')
     return newPR
   }
 
-  const mergePR = (
+  const mergePR = async (
     prId: string,
-    onBroadcast?: (type: string, metadata: any) => void
+    onBroadcast?: (type: string, metadata: any) => Promise<void> | void
   ) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId ? PRService.mergePR(pr) : pr
-      )
-    )
-    
+    const updated = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}/merge`, {
+      method: 'POST',
+      body: {},
+    })
+
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? updated : pr)))
     if (onBroadcast) {
-      onBroadcast('pr_updated', { prId, status: 'merged' })
+      await onBroadcast('pr_updated', { prId, status: 'merged' })
     }
-    
+
     toast.success('Pull request merged successfully')
   }
 
-  const closePR = (prId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId ? PRService.closePR(pr) : pr
-      )
-    )
+  const closePR = async (prId: string) => {
+    const updated = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}/close`, {
+      method: 'POST',
+      body: {},
+    })
+
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? updated : pr)))
     toast.info('Pull request closed')
   }
 
-  const approvePR = (prId: string, userId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId ? PRService.approvePR(pr, userId) : pr
-      )
-    )
+  const approvePR = async (prId: string) => {
+    const updated = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}/approve`, {
+      method: 'POST',
+      body: {},
+    })
+
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? updated : pr)))
     toast.success('Pull request approved')
   }
 
-  const commentOnPR = (prId: string, content: string, author: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId ? PRService.addComment(pr, content, author) : pr
-      )
-    )
+  const commentOnPR = async (prId: string, content: string) => {
+    const updated = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}/comments`, {
+      method: 'POST',
+      body: { content },
+    })
+
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? updated : pr)))
   }
 
-  const addLineComment = (
+  const addLineComment = async (
     prId: string,
     fileId: string,
     lineNumber: number,
     lineType: 'addition' | 'deletion' | 'unchanged',
     content: string,
-    currentUser: User,
+    _currentUser: User,
     parentId?: string,
-    onBroadcast?: (type: string, metadata: any) => void
+    onBroadcast?: (type: string, metadata: any) => Promise<void> | void
   ) => {
-    const comment = LineCommentService.createLineComment(
-      fileId,
-      lineNumber,
-      lineType,
-      content,
-      currentUser
-    )
+    await apiRequest(`/v1/pull-requests/${prId}/files/${encodeURIComponent(fileId)}/comments`, {
+      method: 'POST',
+      body: {
+        lineNumber,
+        lineType,
+        content,
+        parentId,
+      },
+    })
 
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? LineCommentService.addCommentToPR(pr, fileId, comment, parentId)
-          : pr
-      )
-    )
-
+    const refreshed = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}`)
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? refreshed : pr)))
     toast.success('Comment added')
-    
+
     if (onBroadcast) {
-      onBroadcast('pr_updated', { prId, action: 'comment_added' })
+      await onBroadcast('pr_updated', { prId, action: 'comment_added' })
     }
   }
 
-  const resolveLineComment = (prId: string, commentId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? LineCommentService.resolveCommentInPR(pr, commentId)
-          : pr
-      )
-    )
+  const resolveLineComment = async (prId: string, commentId: string) => {
+    await apiRequest(`/v1/pull-requests/${prId}/line-comments/${commentId}/resolve`, {
+      method: 'POST',
+      body: {},
+    })
+
+    const refreshed = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}`)
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? refreshed : pr)))
     toast.success('Comment resolved')
   }
 
-  const toggleLineCommentReaction = (
+  const toggleLineCommentReaction = async (
     prId: string,
     commentId: string,
-    emoji: string,
-    currentUser: User
+    emoji: string
   ) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? LineCommentService.toggleReactionInPR(pr, commentId, emoji, currentUser)
-          : pr
-      )
-    )
+    await apiRequest(`/v1/pull-requests/${prId}/line-comments/${commentId}/reactions/toggle`, {
+      method: 'POST',
+      body: { emoji },
+    })
+
+    const refreshed = await apiRequest<PullRequest>(`/v1/pull-requests/${prId}`)
+    setPullRequests((current) => current.map((pr) => (pr.id === prId ? refreshed : pr)))
   }
 
-  const getOpenPRs = () => PRService.filterByStatus(pullRequests || [], 'open')
-  const getMergedPRs = () => PRService.filterByStatus(pullRequests || [], 'merged')
-  const getClosedPRs = () => PRService.filterByStatus(pullRequests || [], 'closed')
+  const getOpenPRs = () => pullRequests.filter((pr) => pr.status === 'open' || pr.status === 'approved')
+  const getMergedPRs = () => pullRequests.filter((pr) => pr.status === 'merged')
+  const getClosedPRs = () => pullRequests.filter((pr) => pr.status === 'closed')
 
   return {
-    pullRequests: pullRequests || [],
+    pullRequests,
     createPR,
     mergePR,
     closePR,

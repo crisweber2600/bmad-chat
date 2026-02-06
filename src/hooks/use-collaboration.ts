@@ -6,6 +6,7 @@ export function useCollaboration(currentUser: User | null, activeChat: string | 
   const [activeUsers, setActiveUsers] = useState<UserPresence[]>([])
   const [typingUsers, setTypingUsers] = useState<UserPresence[]>([])
   const [recentEvents, setRecentEvents] = useState<CollaborationEvent[]>([])
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'reconnecting' | 'disconnected'>('disconnected')
   const lastEventTimestamp = useRef(Date.now())
   const pollInterval = useRef<number | null>(null)
 
@@ -13,6 +14,7 @@ export function useCollaboration(currentUser: User | null, activeChat: string | 
     if (!currentUser) return
 
     const init = async () => {
+      collaborationService.setConnectionStatusHandler(setConnectionStatus)
       await collaborationService.initialize(currentUser.id)
       
       await collaborationService.updatePresence({
@@ -29,6 +31,7 @@ export function useCollaboration(currentUser: User | null, activeChat: string | 
     init()
 
     return () => {
+      collaborationService.setConnectionStatusHandler(null)
       collaborationService.cleanup()
     }
   }, [currentUser])
@@ -74,6 +77,18 @@ export function useCollaboration(currentUser: User | null, activeChat: string | 
     }
   }, [pollForUpdates, currentUser])
 
+  useEffect(() => {
+    const unsubscribe = collaborationService.subscribe('*', (event) => {
+      setRecentEvents((current) => {
+        const next = [...current, event]
+        return next.slice(-100)
+      })
+      lastEventTimestamp.current = Math.max(lastEventTimestamp.current, event.timestamp)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
   const setTyping = useCallback(async (isTyping: boolean) => {
     if (!currentUser || !activeChat) return
     await collaborationService.setTyping(activeChat, isTyping)
@@ -109,6 +124,7 @@ export function useCollaboration(currentUser: User | null, activeChat: string | 
     activeUsers,
     typingUsers,
     recentEvents,
+    connectionStatus,
     setTyping,
     broadcastEvent,
     subscribeToEvent,

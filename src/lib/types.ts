@@ -132,3 +132,39 @@ export interface CollaborationEvent {
   timestamp: number
   metadata?: Record<string, any>
 }
+
+export interface DecisionRecord {
+  id: string
+  chatId: string
+  title: string
+  value: Record<string, any>
+  status: string
+  isLocked: boolean
+  lockedBy?: string | null
+  lockedAt?: number | null
+  version: number
+  createdAt: number
+  updatedAt: number
+  openConflictCount: number
+}
+
+export interface DecisionVersion {
+  id: string
+  versionNumber: number
+  value: Record<string, any>
+  changedBy: string
+  changedAt: number
+  reason?: string
+}
+
+export interface DecisionConflict {
+  id: string
+  decisionId: string
+  conflictType: string
+  description: string
+  status: string
+  detectedAt: number
+  resolvedAt?: number | null
+  resolvedBy?: string | null
+  resolution?: Record<string, any>
+}

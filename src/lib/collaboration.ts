@@ -1,73 +1,75 @@
-import { UserPresence, CollaborationEvent } from './types'
+import * as signalR from '@microsoft/signalr'
+import { apiRequest, getAccessToken, getApiBaseUrl } from '@/lib/api'
+import { UserPresence, CollaborationEvent } from '@/lib/types'
 
-const PRESENCE_KEY = 'user-presence'
-const EVENTS_KEY = 'collaboration-events'
-const PRESENCE_TIMEOUT = 30000
+type ConnectionStatus = 'connected' | 'connecting' | 'reconnecting' | 'disconnected'
+
+interface PresenceListPayload {
+  users: UserPresence[]
+}
+
+interface CollaborationEventListPayload {
+  events: CollaborationEvent[]
+}
 
 export class CollaborationService {
   private currentUserId: string | null = null
-  private presenceInterval: number | null = null
+  private activeChatId: string | null = null
   private eventListeners: Map<string, Set<(event: CollaborationEvent) => void>> = new Map()
+  private connection: signalR.HubConnection | null = null
+  private connectionStatusHandler: ((status: ConnectionStatus) => void) | null = null
 
   async initialize(userId: string) {
     this.currentUserId = userId
+    await this.ensureConnection()
     await this.updatePresence()
-    
-    this.presenceInterval = window.setInterval(() => {
-      this.updatePresence()
-    }, 5000)
+  }
 
-    await this.cleanupStalePresence()
+  setConnectionStatusHandler(handler: ((status: ConnectionStatus) => void) | null) {
+    this.connectionStatusHandler = handler
   }
 
   async cleanup() {
-    if (this.presenceInterval) {
-      clearInterval(this.presenceInterval)
-      this.presenceInterval = null
+    if (this.currentUserId) {
+      await this.updatePresence({
+        isTyping: false,
+        typingChatId: null,
+      })
     }
 
-    if (this.currentUserId) {
-      await this.removePresence(this.currentUserId)
+    if (this.connection) {
+      await this.connection.stop()
+      this.connection = null
     }
+
+    this.connectionStatusHandler?.('disconnected')
   }
 
   async updatePresence(updates?: Partial<UserPresence>) {
     if (!this.currentUserId) return
 
-    const allPresence = await this.getAllPresence()
-    const currentPresence = allPresence[this.currentUserId] || {}
-
-    const updatedPresence: UserPresence = {
-      ...currentPresence,
-      userId: this.currentUserId,
-      lastSeen: Date.now(),
-      ...updates,
-    } as UserPresence
-
-    allPresence[this.currentUserId] = updatedPresence
-    await window.spark.kv.set(PRESENCE_KEY, allPresence)
-  }
-
-  async getAllPresence(): Promise<Record<string, UserPresence>> {
-    const presence = await window.spark.kv.get<Record<string, UserPresence>>(PRESENCE_KEY)
-    return presence || {}
+    await apiRequest<UserPresence>(`/v1/users/${this.currentUserId}/presence`, {
+      method: 'PUT',
+      body: {
+        activeChat: updates?.activeChat ?? this.activeChatId,
+        isTyping: updates?.isTyping ?? false,
+        typingChatId: updates?.typingChatId ?? null,
+        cursorPosition: updates?.cursorPosition ?? null,
+      },
+    })
   }
 
   async getActiveUsers(chatId?: string): Promise<UserPresence[]> {
-    const allPresence = await this.getAllPresence()
-    const now = Date.now()
-    
-    return Object.values(allPresence).filter((presence) => {
-      const isActive = now - presence.lastSeen < PRESENCE_TIMEOUT
-      const inChat = !chatId || presence.activeChat === chatId
-      return isActive && inChat
-    })
+    const path = chatId ? `/v1/presence?chatId=${encodeURIComponent(chatId)}` : '/v1/presence'
+    const payload = await apiRequest<PresenceListPayload>(path)
+    return payload.users || []
   }
 
   async setTyping(chatId: string, isTyping: boolean) {
     await this.updatePresence({
       isTyping,
       typingChatId: isTyping ? chatId : null,
+      activeChat: chatId,
     })
 
     await this.broadcastEvent({
@@ -81,63 +83,99 @@ export class CollaborationService {
   }
 
   async setActiveChat(chatId: string | null) {
+    this.activeChatId = chatId
     await this.updatePresence({ activeChat: chatId })
   }
 
-  async removePresence(userId: string) {
-    const allPresence = await this.getAllPresence()
-    delete allPresence[userId]
-    await window.spark.kv.set(PRESENCE_KEY, allPresence)
-  }
-
-  async cleanupStalePresence() {
-    const allPresence = await this.getAllPresence()
-    const now = Date.now()
-    let hasChanges = false
-
-    for (const [userId, presence] of Object.entries(allPresence)) {
-      if (now - presence.lastSeen > PRESENCE_TIMEOUT) {
-        delete allPresence[userId]
-        hasChanges = true
-      }
-    }
-
-    if (hasChanges) {
-      await window.spark.kv.set(PRESENCE_KEY, allPresence)
-    }
-  }
-
   async broadcastEvent(event: CollaborationEvent) {
-    const events = await window.spark.kv.get<CollaborationEvent[]>(EVENTS_KEY) || []
-    events.push(event)
-    
-    if (events.length > 100) {
-      events.shift()
-    }
-    
-    await window.spark.kv.set(EVENTS_KEY, events)
+    await apiRequest<CollaborationEvent>('/v1/collaboration-events', {
+      method: 'POST',
+      body: {
+        type: event.type,
+        chatId: event.chatId,
+        prId: event.prId,
+        metadata: event.metadata || {},
+      },
+    })
   }
 
   async getRecentEvents(since: number): Promise<CollaborationEvent[]> {
-    const events = await window.spark.kv.get<CollaborationEvent[]>(EVENTS_KEY) || []
-    return events.filter(event => event.timestamp > since)
+    const payload = await apiRequest<CollaborationEventListPayload>(`/v1/collaboration-events?since=${since}`)
+    return payload.events || []
   }
 
   subscribe(eventType: string, callback: (event: CollaborationEvent) => void) {
     if (!this.eventListeners.has(eventType)) {
       this.eventListeners.set(eventType, new Set())
     }
-    this.eventListeners.get(eventType)!.add(callback)
 
+    this.eventListeners.get(eventType)!.add(callback)
     return () => {
       this.eventListeners.get(eventType)?.delete(callback)
     }
   }
 
   notifyListeners(event: CollaborationEvent) {
-    const listeners = this.eventListeners.get(event.type)
-    if (listeners) {
-      listeners.forEach(callback => callback(event))
+    const directListeners = this.eventListeners.get(event.type)
+    if (directListeners) {
+      directListeners.forEach((listener) => listener(event))
+    }
+
+    const wildcard = this.eventListeners.get('*')
+    if (wildcard) {
+      wildcard.forEach((listener) => listener(event))
+    }
+  }
+
+  private async ensureConnection() {
+    if (this.connection && this.connection.state === signalR.HubConnectionState.Connected) {
+      return
+    }
+
+    this.connectionStatusHandler?.('connecting')
+
+    const token = getAccessToken()
+    this.connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${getApiBaseUrl()}/hubs/chat`, {
+        accessTokenFactory: () => token || '',
+      })
+      .withAutomaticReconnect([0, 2000, 5000, 10000])
+      .build()
+
+    this.connection.on('SparkCompatEvent', (event: CollaborationEvent) => {
+      this.notifyListeners(event)
+    })
+
+    this.connection.on('SESSION_RESTORED', () => {
+      const synthetic: CollaborationEvent = {
+        id: `event-${Date.now()}`,
+        type: 'user_join',
+        userId: this.currentUserId || '',
+        userName: 'System',
+        chatId: this.activeChatId || undefined,
+        timestamp: Date.now(),
+        metadata: { sessionRestored: true },
+      }
+      this.notifyListeners(synthetic)
+    })
+
+    this.connection.onreconnecting(() => {
+      this.connectionStatusHandler?.('reconnecting')
+    })
+
+    this.connection.onreconnected(() => {
+      this.connectionStatusHandler?.('connected')
+    })
+
+    this.connection.onclose(() => {
+      this.connectionStatusHandler?.('disconnected')
+    })
+
+    try {
+      await this.connection.start()
+      this.connectionStatusHandler?.('connected')
+    } catch {
+      this.connectionStatusHandler?.('disconnected')
     }
   }
 }

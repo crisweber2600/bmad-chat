@@ -1,4 +1,4 @@
-# BMAD Backend API Specification
+﻿# BMAD Backend API Specification
 
 This directory contains the OpenAPI 3.1 specification for the BMAD (Business Model Architecture Design) Platform backend API.
 
@@ -43,13 +43,23 @@ The BMAD backend API provides endpoints for a momentum-first collaboration platf
 
 ### File Changes & Comments
 - `POST /pull-requests/{prId}/files/{fileId}/comments` - Add line comment
-- `POST /pull-requests/{prId}/files/{fileId}/comments/{commentId}/resolve` - Resolve comment
-- `POST /pull-requests/{prId}/files/{fileId}/comments/{commentId}/reactions` - Toggle emoji reaction
+- `POST /pull-requests/{prId}/line-comments/{commentId}/resolve` - Resolve comment
+- `POST /pull-requests/{prId}/line-comments/{commentId}/reactions/toggle` - Toggle emoji reaction
 
 ### Collaboration
 - `GET /presence` - Get active users
-- `GET /collaboration/events` - Get recent events (messages, PRs, etc.)
-- `POST /collaboration/events` - Broadcast event
+- `GET /collaboration-events` - Get recent events (messages, PRs, decisions, etc.)
+- `POST /collaboration-events` - Broadcast event
+
+### Decision Center
+- `GET /decisions` - List decisions for a chat
+- `POST /decisions` - Create a decision
+- `PATCH /decisions/{decisionId}` - Update title/value
+- `POST /decisions/{decisionId}/lock` - Lock decision
+- `POST /decisions/{decisionId}/unlock` - Unlock decision
+- `GET /decisions/{decisionId}/history` - Get version history
+- `GET /decisions/{decisionId}/conflicts` - Get conflict list
+- `POST /decisions/{decisionId}/conflicts/{conflictId}/resolve` - Resolve conflict
 
 ### Organization
 - `GET /organization/domains` - List domains
@@ -163,10 +173,10 @@ All endpoints except `/auth/signup`, `/auth/signin`, and `/health` require authe
 ### 1. Creating a Chat and Sending Messages
 ```
 POST /chats
-  → Create chat with Domain/Service/Feature
+  â†’ Create chat with Domain/Service/Feature
 
 POST /chats/{chatId}/messages
-  → AI processes message and responds with:
+  â†’ AI processes message and responds with:
      - Conversational response appropriate for user role
      - Suggested file changes in .bmad/ directory
      - Routing assessment
@@ -176,40 +186,40 @@ POST /chats/{chatId}/messages
 ### 2. Creating a Pull Request
 ```
 POST /pull-requests
-  → Create PR from pending file changes
-  → Status: "open"
+  â†’ Create PR from pending file changes
+  â†’ Status: "open"
 
 POST /pull-requests/{prId}/comments
-  → Add review comments
+  â†’ Add review comments
 
 POST /pull-requests/{prId}/files/{fileId}/comments
-  → Add line-level comments on specific changes
+  â†’ Add line-level comments on specific changes
 
 POST /pull-requests/{prId}/approve
-  → Add approval
+  â†’ Add approval
 
 POST /pull-requests/{prId}/merge
-  → Merge changes to .bmad/ directory in Git
-  → Status: "merged"
+  â†’ Merge changes to .bmad/ directory in Git
+  â†’ Status: "merged"
 ```
 
 ### 3. Real-Time Collaboration
 ```
 PUT /users/{userId}/presence
-  → Update presence (activeChat, isTyping)
+  â†’ Update presence (activeChat, isTyping)
 
 GET /presence
-  → Poll for active users
+  â†’ Poll for active users
 
-GET /collaboration/events?since={timestamp}
-  → Poll for recent events
+GET /collaboration-events?since={timestamp}
+  â†’ Poll for recent events
 ```
 
 ### 4. Role Translation
 ```
 POST /chats/{chatId}/messages/{messageId}/translate
-  → AI analyzes message and identifies segments needing explanation
-  → Returns annotated segments with:
+  â†’ AI analyzes message and identifies segments needing explanation
+  â†’ Returns annotated segments with:
      - Explanation appropriate for user's role
      - Context about why it matters
      - Optional simplified text
@@ -221,13 +231,13 @@ The backend maintains a `.bmad/` directory structure in a Git repository:
 
 ```
 .bmad/
-├── config.yaml          # Project configuration
-├── status.yaml          # Current project status
-├── decisions/           # Approved decisions
-│   ├── auth-strategy.md
-│   └── ...
-├── pending/             # Decisions awaiting approval
-└── history/             # Decision history and audit trail
+â”œâ”€â”€ config.yaml          # Project configuration
+â”œâ”€â”€ status.yaml          # Current project status
+â”œâ”€â”€ decisions/           # Approved decisions
+â”‚   â”œâ”€â”€ auth-strategy.md
+â”‚   â””â”€â”€ ...
+â”œâ”€â”€ pending/             # Decisions awaiting approval
+â””â”€â”€ history/             # Decision history and audit trail
 ```
 
 When a PR is merged via `POST /pull-requests/{prId}/merge`, the backend:
@@ -363,3 +373,4 @@ openapi-generator-cli generate -i openapi.yaml -g go -o ./sdk/go
 ## License
 
 MIT License - See LICENSE file for details
+

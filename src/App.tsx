@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { AuthForm } from '@/components/AuthForm'
 import { MomentumDashboard } from '@/components/MomentumDashboard'
 import { NewChatDialog } from '@/components/NewChatDialog'
@@ -11,6 +12,7 @@ import { FileDiffViewer } from '@/components/FileDiffViewer'
 import { ActiveUsers } from '@/components/ActiveUsers'
 import { TypingIndicator } from '@/components/TypingIndicator'
 import { ActivityFeed } from '@/components/ActivityFeed'
+import { DecisionCenterPanel } from '@/components/DecisionCenterPanel'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -28,8 +30,7 @@ import { usePendingChanges } from '@/hooks/use-pending-changes'
 import { useUIState } from '@/hooks/use-ui-state'
 import { useChatActions } from '@/hooks/use-chat-actions'
 import { useCollaboration } from '@/hooks/use-collaboration'
-import { APP_CONSTANTS } from '@/lib/constants'
-import { PullRequest, LineComment, User } from '@/lib/types'
+import { useDecisions } from '@/hooks/use-decisions'
 
 function App() {
   const { currentUser, isAuthenticated, isLoadingAuth, handleSignIn, handleSignUp, handleSignOut } = useAuth()
@@ -49,6 +50,18 @@ function App() {
     getOpenPRs,
     getMergedPRs,
   } = usePullRequests()
+
+  const {
+    decisions,
+    isLoadingDecisions,
+    loadDecisions,
+    createDecision,
+    lockDecision,
+    unlockDecision,
+    getHistory,
+    getConflicts,
+    resolveConflict,
+  } = useDecisions()
   
   const {
     pendingChanges,
@@ -88,6 +101,7 @@ function App() {
     activeUsers, 
     typingUsers, 
     recentEvents,
+    connectionStatus,
     setTyping,
     broadcastEvent,
   } = useCollaboration(currentUser, activeChat)
@@ -103,47 +117,47 @@ function App() {
     broadcastEvent
   )
 
-  const handleCreateChat = (domain: string, service: string, feature: string, title: string) => {
+  const handleCreateChat = async (domain: string, service: string, feature: string, title: string) => {
     if (!currentUser) return
-    const newChat = createChat(domain, service, feature, title, currentUser.id)
+    const newChat = await createChat(domain, service, feature, title)
     handleSelectChat(newChat.id)
     toast.success('Chat created')
   }
 
-  const handleCreatePR = (title: string, description: string) => {
+  const handleCreatePR = async (title: string, description: string) => {
     if (!currentUser || !pendingChanges.length) return
-    createPR(title, description, activeChat || '', currentUser, pendingChanges, broadcastEvent)
+    await createPR(title, description, activeChat || '', currentUser, pendingChanges, broadcastEvent)
     clearChanges()
     setCreatePRDialogOpen(false)
   }
 
-  const handleMergePR = (prId: string) => {
-    mergePR(prId, broadcastEvent)
+  const handleMergePR = async (prId: string) => {
+    await mergePR(prId, broadcastEvent)
     setPRDialogOpen(false)
   }
 
-  const handleClosePR = (prId: string) => {
-    closePR(prId)
+  const handleClosePR = async (prId: string) => {
+    await closePR(prId)
     setPRDialogOpen(false)
   }
 
-  const handleApprovePR = (prId: string) => {
+  const handleApprovePR = async (prId: string) => {
     if (!currentUser) return
-    approvePR(prId, currentUser.id)
+    await approvePR(prId)
   }
 
-  const handleCommentPR = (prId: string, content: string) => {
+  const handleCommentPR = async (prId: string, content: string) => {
     if (!currentUser) return
-    commentOnPR(prId, content, currentUser.name)
+    await commentOnPR(prId, content)
   }
 
-  const handleAddLineComment = (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
+  const handleAddLineComment = async (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
     if (!currentUser) return
-    addPRLineComment(prId, fileId, lineNumber, lineType, content, currentUser, parentId, broadcastEvent)
+    await addPRLineComment(prId, fileId, lineNumber, lineType, content, currentUser, parentId, broadcastEvent)
   }
 
-  const handleResolveLineComment = (prId: string, commentId: string) => {
-    resolvePRLineComment(prId, commentId)
+  const handleResolveLineComment = async (prId: string, commentId: string) => {
+    await resolvePRLineComment(prId, commentId)
   }
 
   const handleAddPendingLineComment = (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
@@ -155,9 +169,9 @@ function App() {
     resolvePendingLineComment(commentId)
   }
 
-  const handleToggleLineCommentReaction = (prId: string, commentId: string, emoji: string) => {
+  const handleToggleLineCommentReaction = async (prId: string, commentId: string, emoji: string) => {
     if (!currentUser) return
-    togglePRLineCommentReaction(prId, commentId, emoji, currentUser)
+    await togglePRLineCommentReaction(prId, commentId, emoji)
   }
 
   const handleTogglePendingLineCommentReaction = (commentId: string, emoji: string) => {
@@ -171,12 +185,44 @@ function App() {
     if (!chat) return
     const message = chat.messages.find((m) => m.id === messageId)
     if (!message) return
-    await handleTranslateMessage(messageId, message.content)
+    await handleTranslateMessage(messageId)
+  }
+
+  useEffect(() => {
+    if (!activeChat) return
+    loadDecisions(activeChat)
+  }, [activeChat, loadDecisions])
+
+  const refreshDecisions = async () => {
+    if (!activeChat) return
+    await loadDecisions(activeChat)
+  }
+
+  const handleCreateDecision = async (title: string, value: Record<string, any>) => {
+    if (!activeChat) return
+    await createDecision(activeChat, title, value)
+    await refreshDecisions()
+  }
+
+  const handleLockDecision = async (decisionId: string) => {
+    await lockDecision(decisionId)
+    await refreshDecisions()
+  }
+
+  const handleUnlockDecision = async (decisionId: string) => {
+    await unlockDecision(decisionId)
+    await refreshDecisions()
+  }
+
+  const handleResolveConflict = async (decisionId: string, conflictId: string, resolution: string) => {
+    await resolveConflict(decisionId, conflictId, resolution)
+    await refreshDecisions()
   }
 
   const activeChatData = chats.find((c) => c.id === activeChat)
-  const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
+  const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open' || pr.status === 'approved')
   const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
+  const openDecisionConflicts = decisions.reduce((total, decision) => total + (decision.openConflictCount || 0), 0)
   const organization = getOrganization()
 
   if (isLoadingAuth) {
@@ -197,6 +243,13 @@ function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <Toaster position="top-right" />
+      {connectionStatus !== 'connected' && (
+        <div className="h-8 shrink-0 bg-amber-100 text-amber-900 text-xs font-medium px-4 flex items-center">
+          {connectionStatus === 'reconnecting' && 'Reconnecting to collaboration stream...'}
+          {connectionStatus === 'connecting' && 'Connecting to collaboration stream...'}
+          {connectionStatus === 'disconnected' && 'Realtime connection lost. Retrying...'}
+        </div>
+      )}
       
       <header className="h-14 md:h-16 border-b bg-card px-4 md:px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 md:gap-4">
@@ -385,6 +438,14 @@ function App() {
                         </Badge>
                       )}
                     </TabsTrigger>
+                    <TabsTrigger value="decisions" className="flex-1">
+                      Decisions
+                      {openDecisionConflicts > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {openDecisionConflicts}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
                     <TabsTrigger value="activity" className="flex-1">
                       <ChartLine size={16} className="mr-1" />
                       Activity
@@ -473,6 +534,21 @@ function App() {
                       </div>
                     </ScrollArea>
                   </TabsContent>
+
+                  <TabsContent value="decisions" className="flex-1 flex flex-col mt-0">
+                    <DecisionCenterPanel
+                      activeChat={activeChat}
+                      decisions={decisions}
+                      isLoading={isLoadingDecisions}
+                      onRefresh={refreshDecisions}
+                      onCreateDecision={handleCreateDecision}
+                      onLockDecision={handleLockDecision}
+                      onUnlockDecision={handleUnlockDecision}
+                      onGetHistory={getHistory}
+                      onGetConflicts={getConflicts}
+                      onResolveConflict={handleResolveConflict}
+                    />
+                  </TabsContent>
                 </Tabs>
               </div>
             </SheetContent>
@@ -499,6 +575,11 @@ function App() {
                     {openPRs.length}
                   </Badge>
                 )}
+                {openDecisionConflicts > 0 && (
+                  <Badge variant="secondary" className="rounded-full h-6 w-6 p-0 flex items-center justify-center text-xs">
+                    {openDecisionConflicts}
+                  </Badge>
+                )}
               </div>
             ) : (
               <Tabs defaultValue="changes" className="flex-1 flex flex-col">
@@ -518,6 +599,14 @@ function App() {
                       {openPRs.length > 0 && (
                         <Badge variant="secondary" className="ml-2">
                           {openPRs.length}
+                        </Badge>
+                      )}
+                    </TabsTrigger>
+                    <TabsTrigger value="decisions" className="flex-1">
+                      Decisions
+                      {openDecisionConflicts > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          {openDecisionConflicts}
                         </Badge>
                       )}
                     </TabsTrigger>
@@ -618,6 +707,21 @@ function App() {
                     </div>
                   </div>
                 </ScrollArea>
+              </TabsContent>
+
+              <TabsContent value="decisions" className="flex-1 flex flex-col mt-0">
+                <DecisionCenterPanel
+                  activeChat={activeChat}
+                  decisions={decisions}
+                  isLoading={isLoadingDecisions}
+                  onRefresh={refreshDecisions}
+                  onCreateDecision={handleCreateDecision}
+                  onLockDecision={handleLockDecision}
+                  onUnlockDecision={handleUnlockDecision}
+                  onGetHistory={getHistory}
+                  onGetConflicts={getConflicts}
+                  onResolveConflict={handleResolveConflict}
+                />
               </TabsContent>
             </Tabs>
             )}

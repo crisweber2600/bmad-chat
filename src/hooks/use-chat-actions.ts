@@ -30,12 +30,12 @@ export function useChatActions(
     )
   }
 
-  const handleTranslateMessage = async (messageId: string, content: string) => {
+  const handleTranslateMessage = async (messageId: string) => {
     if (!currentUser || !activeChat) return
 
     await translateMessageService(
+      activeChat,
       messageId,
-      content,
       currentUser,
       (msgId, translation) => addTranslation(activeChat, msgId, translation)
     )

@@ -17,6 +17,15 @@ info:
     ## Authentication
     
     All endpoints (except auth endpoints) require authentication via Bearer token or session cookie.
+
+    ## Response Envelope
+
+    Spark compatibility endpoints return a standard envelope:
+    - `success`: operation result
+    - `statusCode`: HTTP-aligned status code
+    - `message`: human-readable summary
+    - `data`: endpoint payload
+    - `traceId`: server trace identifier
   contact:
     name: BMAD Support
     email: support@bmad.example.com
@@ -548,6 +557,15 @@ paths:
       parameters:
         - $ref: '#/components/parameters/ChatId'
         - $ref: '#/components/parameters/MessageId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  $ref: '#/components/schemas/UserRole'
       responses:
         '200':
           description: Translation completed
@@ -574,7 +592,7 @@ paths:
           description: Filter by PR status
           schema:
             type: string
-            enum: [open, merged, closed, draft]
+            enum: [open, approved, merged, closed, draft]
         - name: chatId
           in: query
           description: Filter by chat ID
@@ -903,7 +921,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /pull-requests/{prId}/files/{fileId}/comments/{commentId}/resolve:
+  /pull-requests/{prId}/line-comments/{commentId}/resolve:
     post:
       tags:
         - File Changes
@@ -912,11 +930,6 @@ paths:
       operationId: resolveLineComment
       parameters:
         - $ref: '#/components/parameters/PullRequestId'
-        - name: fileId
-          in: path
-          required: true
-          schema:
-            type: string
         - name: commentId
           in: path
           required: true
@@ -932,7 +945,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /pull-requests/{prId}/files/{fileId}/comments/{commentId}/reactions:
+  /pull-requests/{prId}/line-comments/{commentId}/reactions/toggle:
     post:
       tags:
         - File Changes
@@ -941,11 +954,6 @@ paths:
       operationId: toggleReaction
       parameters:
         - $ref: '#/components/parameters/PullRequestId'
-        - name: fileId
-          in: path
-          required: true
-          schema:
-            type: string
         - name: commentId
           in: path
           required: true
@@ -973,7 +981,7 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /collaboration/events:
+  /collaboration-events:
     get:
       tags:
         - Collaboration
@@ -983,23 +991,11 @@ paths:
       parameters:
         - name: since
           in: query
-          description: Return events after this timestamp
-          required: true
+          description: Return events strictly after this timestamp
+          required: false
           schema:
             type: integer
             format: int64
-        - name: chatId
-          in: query
-          description: Filter to events in a specific chat
-          schema:
-            type: string
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
       responses:
         '200':
           description: List of events
@@ -1008,10 +1004,22 @@ paths:
               schema:
                 type: object
                 properties:
-                  events:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/CollaborationEvent'
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CollaborationEvent'
 
     post:
       tags:
@@ -1038,13 +1046,354 @@ paths:
                 metadata:
                   type: object
                   additionalProperties: true
+                workflowMetadata:
+                  type: object
+                  additionalProperties: true
+                decisionMetadata:
+                  type: object
+                  additionalProperties: true
       responses:
         '201':
           description: Event broadcasted successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CollaborationEvent'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/CollaborationEvent'
+
+  /decisions:
+    get:
+      tags:
+        - AI
+      summary: List decisions for a chat
+      operationId: listDecisions
+      parameters:
+        - name: chatId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decision list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+                    properties:
+                      decisions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Decision'
+    post:
+      tags:
+        - AI
+      summary: Create decision
+      operationId: createDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - chatId
+                - title
+                - value
+              properties:
+                chatId:
+                  type: string
+                title:
+                  type: string
+                value:
+                  type: object
+                  additionalProperties: true
+                reason:
+                  type: string
+      responses:
+        '201':
+          description: Decision created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/Decision'
+
+  /decisions/{decisionId}:
+    patch:
+      tags:
+        - AI
+      summary: Update decision
+      operationId: updateDecision
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                value:
+                  type: object
+                  additionalProperties: true
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Decision updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/Decision'
+
+  /decisions/{decisionId}/lock:
+    post:
+      tags:
+        - AI
+      summary: Lock decision
+      operationId: lockDecision
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Decision locked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/Decision'
+
+  /decisions/{decisionId}/unlock:
+    post:
+      tags:
+        - AI
+      summary: Unlock decision
+      operationId: unlockDecision
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decision unlocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/Decision'
+
+  /decisions/{decisionId}/history:
+    get:
+      tags:
+        - AI
+      summary: Decision version history
+      operationId: getDecisionHistory
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decision history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+                    properties:
+                      versions:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DecisionVersion'
+
+  /decisions/{decisionId}/conflicts:
+    get:
+      tags:
+        - AI
+      summary: List decision conflicts
+      operationId: listDecisionConflicts
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Decision conflicts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    type: object
+                    properties:
+                      conflicts:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DecisionConflict'
+
+  /decisions/{decisionId}/conflicts/{conflictId}/resolve:
+    post:
+      tags:
+        - AI
+      summary: Resolve decision conflict
+      operationId: resolveDecisionConflict
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conflictId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - resolution
+              properties:
+                resolution:
+                  type: string
+      responses:
+        '200':
+          description: Conflict resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  statusCode:
+                    type: integer
+                  message:
+                    type: string
+                  traceId:
+                    type: string
+                    nullable: true
+                  data:
+                    $ref: '#/components/schemas/DecisionConflict'
 
   /organization/domains:
     get:
@@ -1654,9 +2003,10 @@ components:
 
     PRStatus:
       type: string
-      enum: [open, merged, closed, draft]
+      enum: [open, approved, merged, closed, draft]
       description: |
         - **open**: PR is open and awaiting review/approval
+        - **approved**: PR has at least one valid approval and is ready to merge
         - **merged**: PR has been merged to the repository
         - **closed**: PR was closed without merging
         - **draft**: PR is still being worked on
@@ -1759,7 +2109,8 @@ components:
           example: event-1705712345678
         type:
           type: string
-          enum: [user_join, user_leave, typing_start, typing_stop, message_sent, pr_created, pr_updated]
+          description: Spark-compatible event name
+          example: pr_merged
         userId:
           type: string
           example: user-1705712345678
@@ -1781,6 +2132,129 @@ components:
         metadata:
           type: object
           description: Additional event-specific data
+          additionalProperties: true
+        workflowMetadata:
+          type: object
+          description: Optional workflow metadata payload
+          additionalProperties: true
+        decisionMetadata:
+          type: object
+          description: Optional decision metadata payload
+          additionalProperties: true
+
+    Decision:
+      type: object
+      required:
+        - id
+        - chatId
+        - title
+        - value
+        - status
+        - isLocked
+        - version
+        - createdAt
+        - updatedAt
+        - openConflictCount
+      properties:
+        id:
+          type: string
+          example: decision-1705712345678
+        chatId:
+          type: string
+          example: chat-1705712345678
+        title:
+          type: string
+          example: Auth strategy
+        value:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          example: open
+        isLocked:
+          type: boolean
+        lockedBy:
+          type: string
+          nullable: true
+        lockedAt:
+          type: integer
+          format: int64
+          nullable: true
+        version:
+          type: integer
+          minimum: 1
+        createdAt:
+          type: integer
+          format: int64
+        updatedAt:
+          type: integer
+          format: int64
+        openConflictCount:
+          type: integer
+          minimum: 0
+
+    DecisionVersion:
+      type: object
+      required:
+        - id
+        - versionNumber
+        - value
+        - changedBy
+        - changedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+          minimum: 1
+        value:
+          type: object
+          additionalProperties: true
+        changedBy:
+          type: string
+        changedAt:
+          type: integer
+          format: int64
+        reason:
+          type: string
+          nullable: true
+
+    DecisionConflict:
+      type: object
+      required:
+        - id
+        - decisionId
+        - conflictType
+        - description
+        - status
+        - detectedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        decisionId:
+          type: string
+        conflictType:
+          type: string
+          example: value_mismatch
+        description:
+          type: string
+        status:
+          type: string
+          example: open
+        detectedAt:
+          type: integer
+          format: int64
+        resolvedAt:
+          type: integer
+          format: int64
+          nullable: true
+        resolvedBy:
+          type: string
+          nullable: true
+        resolution:
+          type: object
           additionalProperties: true
 
     Error:

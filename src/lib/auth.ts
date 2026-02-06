@@ -1,7 +1,31 @@
+import { apiRequest, clearAuthCache, getCurrentUserCache, setAccessToken, setCurrentUserCache } from '@/lib/api'
 import { AuthUser } from '@/lib/types'
 
-const USERS_KEY = 'docflow-users'
-const CURRENT_USER_KEY = 'docflow-current-user'
+interface AuthResponse {
+  user: ServerUser
+  token: string
+}
+
+interface ServerUser {
+  id: string
+  email: string
+  name: string
+  role: 'technical' | 'business'
+  avatarUrl: string
+  createdAt: number
+}
+
+function mapAuthUser(user: ServerUser): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt,
+    password: '',
+  }
+}
 
 export async function signUp(
   email: string,
@@ -9,54 +33,62 @@ export async function signUp(
   name: string,
   role: 'technical' | 'business'
 ): Promise<AuthUser> {
-  const users = await getAllUsers()
-  
-  const existingUser = users.find((u) => u.email === email)
-  if (existingUser) {
-    throw new Error('User with this email already exists')
-  }
+  const data = await apiRequest<AuthResponse>('/v1/auth/signup', {
+    method: 'POST',
+    body: { email, password, name, role },
+    requireAuth: false,
+  })
 
-  const newUser: AuthUser = {
-    id: `user-${Date.now()}`,
-    email,
-    password,
-    name,
-    role,
-    avatarUrl: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-    createdAt: Date.now(),
-  }
-
-  users.push(newUser)
-  await window.spark.kv.set(USERS_KEY, users)
-  
-  return newUser
+  setAccessToken(data.token)
+  const user = mapAuthUser(data.user)
+  setCurrentUserCache(user)
+  return user
 }
 
 export async function signIn(email: string, password: string): Promise<AuthUser> {
-  const users = await getAllUsers()
-  
-  const user = users.find((u) => u.email === email && u.password === password)
-  if (!user) {
-    throw new Error('Invalid email or password')
-  }
+  const data = await apiRequest<AuthResponse>('/v1/auth/signin', {
+    method: 'POST',
+    body: { email, password },
+    requireAuth: false,
+  })
 
+  setAccessToken(data.token)
+  const user = mapAuthUser(data.user)
+  setCurrentUserCache(user)
   return user
 }
 
 export async function setCurrentUser(user: AuthUser): Promise<void> {
-  await window.spark.kv.set(CURRENT_USER_KEY, user)
+  setCurrentUserCache(user)
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const user = await window.spark.kv.get<AuthUser>(CURRENT_USER_KEY)
-  return user || null
+  try {
+    const data = await apiRequest<ServerUser>('/v1/auth/me', {
+      method: 'GET',
+      requireAuth: true,
+    })
+    const user = mapAuthUser(data)
+    setCurrentUserCache(user)
+    return user
+  } catch {
+    const cached = getCurrentUserCache<AuthUser>()
+    if (!cached) {
+      clearAuthCache()
+      return null
+    }
+
+    return cached
+  }
 }
 
 export async function signOut(): Promise<void> {
-  await window.spark.kv.delete(CURRENT_USER_KEY)
-}
-
-async function getAllUsers(): Promise<AuthUser[]> {
-  const users = await window.spark.kv.get<AuthUser[]>(USERS_KEY)
-  return users || []
+  try {
+    await apiRequest<{ signedOut: boolean }>('/v1/auth/signout', {
+      method: 'POST',
+      requireAuth: true,
+    })
+  } finally {
+    clearAuthCache()
+  }
 }
