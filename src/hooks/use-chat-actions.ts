@@ -8,7 +8,7 @@ export function useChatActions(
   addTranslation: (chatId: string, messageId: string, translation: any) => void,
   addPendingChanges: (changes: any[]) => void,
   setIsTyping: (isTyping: boolean) => void,
-  setTyping: (chatId: string, isTyping: boolean) => void,
+  setTyping: (isTyping: boolean) => Promise<void>,
   broadcastEvent: (type: string, metadata: any) => Promise<void>
 ) {
   const handleSendMessage = async (content: string) => {
@@ -42,9 +42,7 @@ export function useChatActions(
   }
 
   const handleTypingChange = async (isTyping: boolean) => {
-    if (activeChat) {
-      await setTyping(activeChat, isTyping)
-    }
+    await setTyping(isTyping)
   }
 
   return {

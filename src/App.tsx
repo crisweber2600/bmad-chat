@@ -29,6 +29,7 @@ import { useUIState } from '@/hooks/use-ui-state'
 import { useChatActions } from '@/hooks/use-chat-actions'
 import { useCollaboration } from '@/hooks/use-collaboration'
 import { APP_CONSTANTS } from '@/lib/constants'
+import { PullRequest, LineComment, User } from '@/lib/types'
 
 function App() {
   const { currentUser, isAuthenticated, isLoadingAuth, handleSignIn, handleSignUp, handleSignOut } = useAuth()
@@ -109,568 +110,74 @@ function App() {
     toast.success('Chat created')
   }
 
-  const handleSendMessage = async (content: string) => {
-    if (!activeChat || !currentUser) return
-
-    const userMessage: Message = {
-      id: `msg-${Date.now()}`,
-      chatId: activeChat,
-      content,
-      role: 'user',
-      timestamp: Date.now(),
-      userId: currentUser.id,
-    }
-
-    setChats((current) =>
-      (current || []).map((chat) =>
-        chat.id === activeChat
-          ? {
-              ...chat,
-              messages: [...chat.messages, userMessage],
-              updatedAt: Date.now(),
-              title: chat.messages.length === 0 ? content.slice(0, 50) : chat.title,
-            }
-          : chat
-      )
-    )
-
-    await broadcastEvent('message_sent', { content: content.slice(0, 50) })
-
-    setIsTyping(true)
-
-    try {
-      const roleGuidance = currentUser.role === 'business' 
-        ? '- Business impact, user benefits, and outcomes\n- Market validation and user needs\n- Clear next actions without technical jargon\n- "Accept for Now" patterns to prevent analysis paralysis' 
-        : '- Implementation details and architecture\n- Non-ambiguous requirements with who/what/success/out-of-scope\n- Technical feasibility and integration points\n- Decision traceability and blast radius'
-      
-      const promptText = `You are BMAD, an intelligent orchestrator for business model architecture design. Your role is to bridge technical and non-technical co-founders by:
-1. Routing technical questions to technical users and business questions to business users
-2. Protecting engineers from ambiguous requirements (Requirements Firewall)
-3. Enforcing commitment hierarchy: Sarah (business) → Market → Users → BMAD validation → Marcus (technical)
-4. Maintaining momentum - projects must always move forward
-
-Current User: ${currentUser.name} (${currentUser.role} role)
-
-User message: ${content}
-
-Based on this conversation, generate:
-1. A helpful response that respects their role and expertise level
-2. Suggested markdown documentation changes in the .bmad/ directory structure (if applicable)
-3. Assessment: Is this question properly routed to this user? (technical questions to technical users, business to business)
-
-For ${currentUser.role} users, focus on:
-${roleGuidance}
-
-Respond in a conversational way that builds momentum. If the conversation suggests documentation updates, mention what files in .bmad/ should be updated.
-
-Format your response as JSON with this structure:
-{
-  "response": "your conversational response here",
-  "suggestedChanges": [
-    {
-      "path": ".bmad/decisions/example-decision.md",
-      "additions": ["# Decision: Example", "**Status:** Pending", "Content here"],
-      "deletions": [],
-      "status": "pending"
-    }
-  ],
-  "routingAssessment": "correctly routed",
-  "momentumIndicator": "high"
-}`
-
-      const response = await window.spark.llm(promptText, 'gpt-4o', true)
-      const parsed = JSON.parse(response)
-
-      if (parsed.routingAssessment && parsed.routingAssessment !== 'correctly routed') {
-        toast.info(`Note: This question might benefit from ${parsed.routingAssessment.replace('needs ', '')}`)
-      }
-
-      const aiMessage: Message = {
-        id: `msg-${Date.now()}-ai`,
-        chatId: activeChat,
-        content: parsed.response,
-        role: 'assistant',
-        timestamp: Date.now(),
-        fileChanges: parsed.suggestedChanges || [],
-      }
-
-      setChats((current) =>
-        (current || []).map((chat) =>
-          chat.id === activeChat
-            ? {
-                ...chat,
-                messages: [...chat.messages, aiMessage],
-                updatedAt: Date.now(),
-              }
-            : chat
-        )
-      )
-
-      if (parsed.suggestedChanges && parsed.suggestedChanges.length > 0) {
-        setPendingChanges((current) => [...(current || []), ...parsed.suggestedChanges])
-        toast.success('Documentation changes suggested')
-      }
-    } catch (error) {
-      toast.error('Failed to get AI response')
-      console.error(error)
-    } finally {
-      setIsTyping(false)
-    }
-  }
-
   const handleCreatePR = (title: string, description: string) => {
-    if (!currentUser || (pendingChanges || []).length === 0) return
-
-    const newPR: PullRequest = {
-      id: `pr-${Date.now()}`,
-      title,
-      description,
-      chatId: activeChat || '',
-      author: currentUser.name,
-      status: 'open',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      fileChanges: (pendingChanges || []).map((change) => ({ ...change, status: 'staged' as const })),
-      comments: [],
-      approvals: [],
-    }
-
-    setPullRequests((current) => [newPR, ...(current || [])])
-    setPendingChanges([])
-    broadcastEvent('pr_created', { prId: newPR.id, title })
-    toast.success('Pull request created')
+    if (!currentUser || !pendingChanges.length) return
+    createPR(title, description, activeChat || '', currentUser, pendingChanges, broadcastEvent)
+    clearChanges()
+    setCreatePRDialogOpen(false)
   }
 
   const handleMergePR = (prId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? { ...pr, status: 'merged' as const, updatedAt: Date.now() }
-          : pr
-      )
-    )
+    mergePR(prId, broadcastEvent)
     setPRDialogOpen(false)
-    broadcastEvent('pr_updated', { prId, status: 'merged' })
-    toast.success('Pull request merged successfully')
   }
 
   const handleClosePR = (prId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? { ...pr, status: 'closed' as const, updatedAt: Date.now() }
-          : pr
-      )
-    )
+    closePR(prId)
     setPRDialogOpen(false)
-    toast.info('Pull request closed')
   }
 
   const handleApprovePR = (prId: string) => {
     if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId && !pr.approvals.includes(currentUser.id)
-          ? { ...pr, approvals: [...pr.approvals, currentUser.id], updatedAt: Date.now() }
-          : pr
-      )
-    )
-    toast.success('Pull request approved')
+    approvePR(prId, currentUser.id)
   }
 
   const handleCommentPR = (prId: string, content: string) => {
     if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) =>
-        pr.id === prId
-          ? {
-              ...pr,
-              comments: [
-                ...pr.comments,
-                {
-                  id: `comment-${Date.now()}`,
-                  prId,
-                  author: currentUser.name,
-                  content,
-                  timestamp: Date.now(),
-                },
-              ],
-              updatedAt: Date.now(),
-            }
-          : pr
-      )
-    )
+    commentOnPR(prId, content, currentUser.name)
   }
 
   const handleAddLineComment = (prId: string, fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
     if (!currentUser) return
-
-    const newComment: LineComment = {
-      id: `line-comment-${Date.now()}`,
-      fileId,
-      lineNumber,
-      lineType,
-      author: currentUser.name,
-      authorAvatar: currentUser.avatarUrl,
-      content,
-      timestamp: Date.now(),
-      resolved: false,
-    }
-
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => {
-            if (file.path !== fileId) return file
-
-            if (parentId) {
-              return {
-                ...file,
-                lineComments: (file.lineComments || []).map((comment) => {
-                  if (comment.id === parentId) {
-                    return {
-                      ...comment,
-                      replies: [...(comment.replies || []), newComment],
-                    }
-                  }
-                  return comment
-                }),
-              }
-            }
-
-            return {
-              ...file,
-              lineComments: [...(file.lineComments || []), newComment],
-            }
-          }),
-          updatedAt: Date.now(),
-        }
-      })
-    )
-
-    toast.success('Comment added')
-    broadcastEvent('pr_updated', { prId, action: 'comment_added' })
+    addPRLineComment(prId, fileId, lineNumber, lineType, content, currentUser, parentId, broadcastEvent)
   }
 
   const handleResolveLineComment = (prId: string, commentId: string) => {
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => ({
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) =>
-              comment.id === commentId
-                ? { ...comment, resolved: true }
-                : comment
-            ),
-          })),
-          updatedAt: Date.now(),
-        }
-      })
-    )
-
-    toast.success('Comment resolved')
+    resolvePRLineComment(prId, commentId)
   }
 
   const handleAddPendingLineComment = (fileId: string, lineNumber: number, lineType: 'addition' | 'deletion' | 'unchanged', content: string, parentId?: string) => {
     if (!currentUser) return
-
-    const newComment: LineComment = {
-      id: `line-comment-${Date.now()}`,
-      fileId,
-      lineNumber,
-      lineType,
-      author: currentUser.name,
-      authorAvatar: currentUser.avatarUrl,
-      content,
-      timestamp: Date.now(),
-      resolved: false,
-    }
-
-    setPendingChanges((current) =>
-      (current || []).map((file) => {
-        if (file.path !== fileId) return file
-
-        if (parentId) {
-          return {
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) => {
-              if (comment.id === parentId) {
-                return {
-                  ...comment,
-                  replies: [...(comment.replies || []), newComment],
-                }
-              }
-              return comment
-            }),
-          }
-        }
-
-        return {
-          ...file,
-          lineComments: [...(file.lineComments || []), newComment],
-        }
-      })
-    )
-
-    toast.success('Comment added')
+    addPendingLineComment(fileId, lineNumber, lineType, content, currentUser, parentId)
   }
 
   const handleResolvePendingLineComment = (commentId: string) => {
-    setPendingChanges((current) =>
-      (current || []).map((file) => ({
-        ...file,
-        lineComments: (file.lineComments || []).map((comment) =>
-          comment.id === commentId
-            ? { ...comment, resolved: true }
-            : comment
-        ),
-      }))
-    )
-
-    toast.success('Comment resolved')
+    resolvePendingLineComment(commentId)
   }
 
   const handleToggleLineCommentReaction = (prId: string, commentId: string, emoji: string) => {
     if (!currentUser) return
-
-    setPullRequests((current) =>
-      (current || []).map((pr) => {
-        if (pr.id !== prId) return pr
-
-        return {
-          ...pr,
-          fileChanges: pr.fileChanges.map((file) => ({
-            ...file,
-            lineComments: (file.lineComments || []).map((comment) => {
-              if (comment.id === commentId) {
-                return toggleReactionOnComment(comment, emoji, currentUser)
-              }
-              if (comment.replies) {
-                return {
-                  ...comment,
-                  replies: comment.replies.map((reply) =>
-                    reply.id === commentId
-                      ? toggleReactionOnComment(reply, emoji, currentUser)
-                      : reply
-                  ),
-                }
-              }
-              return comment
-            }),
-          })),
-          updatedAt: Date.now(),
-        }
-      })
-    )
+    togglePRLineCommentReaction(prId, commentId, emoji, currentUser)
   }
 
   const handleTogglePendingLineCommentReaction = (commentId: string, emoji: string) => {
     if (!currentUser) return
-
-    setPendingChanges((current) =>
-      (current || []).map((file) => ({
-        ...file,
-        lineComments: (file.lineComments || []).map((comment) => {
-          if (comment.id === commentId) {
-            return toggleReactionOnComment(comment, emoji, currentUser)
-          }
-          if (comment.replies) {
-            return {
-              ...comment,
-              replies: comment.replies.map((reply) =>
-                reply.id === commentId
-                  ? toggleReactionOnComment(reply, emoji, currentUser)
-                  : reply
-              ),
-            }
-          }
-          return comment
-        }),
-      }))
-    )
+    togglePendingLineCommentReaction(commentId, emoji, currentUser)
   }
 
-  const handleTranslateMessage = async (messageId: string) => {
+  const handleTranslateMessageWrapper = async (messageId: string) => {
     if (!currentUser || !activeChat) return
-
-    const chat = (chats || []).find((c) => c.id === activeChat)
+    const chat = chats.find((c) => c.id === activeChat)
     if (!chat) return
-
     const message = chat.messages.find((m) => m.id === messageId)
     if (!message) return
-
-    if (message.translations?.find((t) => t.role === currentUser.role)) {
-      toast.info('Message already translated for your role')
-      return
-    }
-
-    try {
-      const roleDescription = currentUser.role === 'business'
-        ? 'a business user who needs plain language explanations without technical jargon'
-        : 'a technical user who needs detailed implementation specifics and technical accuracy'
-
-      const promptText = `You are a translator that helps ${roleDescription} understand documentation and technical content.
-
-Analyze the following text and identify segments that need explanation for a ${currentUser.role} user:
-
-"${message.content}"
-
-For each technical term, API reference, code snippet, or jargon that needs explanation:
-1. Identify the exact text that needs clarification
-2. Provide a clear explanation appropriate for a ${currentUser.role} user
-3. Give context about why it matters in the larger project
-
-${currentUser.role === 'business' 
-  ? 'Focus on business impact, user benefits, and outcomes. Avoid technical implementation details.' 
-  : 'Focus on implementation details, APIs, architecture, and technical specifications.'}
-
-Return a JSON object with this exact structure:
-{
-  "segments": [
-    {
-      "originalText": "the exact text from the message that needs explanation",
-      "startIndex": 0,
-      "endIndex": 10,
-      "explanation": "clear explanation for ${currentUser.role} user",
-      "context": "why this matters in the project",
-      "simplifiedText": "optional simplified version (only if significantly clearer)"
-    }
-  ]
-}
-
-Important: 
-- startIndex and endIndex must match the exact position in the original text
-- Only include segments that genuinely need explanation for a ${currentUser.role} user
-- If nothing needs explanation, return an empty segments array`
-
-      const response = await window.spark.llm(promptText, 'gpt-4o', true)
-      const parsed = JSON.parse(response)
-
-      setChats((current) =>
-        (current || []).map((chat) =>
-          chat.id === activeChat
-            ? {
-                ...chat,
-                messages: chat.messages.map((msg) =>
-                  msg.id === messageId
-                    ? {
-                        ...msg,
-                        translations: [
-                          ...(msg.translations || []),
-                          {
-                            role: currentUser.role,
-                            segments: parsed.segments || [],
-                          },
-                        ],
-                      }
-                    : msg
-                ),
-                updatedAt: Date.now(),
-              }
-            : chat
-        )
-      )
-
-      if (parsed.segments && parsed.segments.length > 0) {
-        toast.success(`Translated ${parsed.segments.length} term${parsed.segments.length > 1 ? 's' : ''} for ${currentUser.role} context`)
-      } else {
-        toast.info('No terms needed translation')
-      }
-    } catch (error) {
-      toast.error('Failed to translate message')
-      console.error(error)
-    }
+    await handleTranslateMessage(messageId, message.content)
   }
 
-  const toggleReactionOnComment = (comment: LineComment, emoji: string, user: User): LineComment => {
-    const reactions = comment.reactions || []
-    const existingReaction = reactions.find((r) => r.emoji === emoji)
-
-    if (existingReaction) {
-      const hasReacted = existingReaction.userIds.includes(user.id)
-      if (hasReacted) {
-        const updatedUserIds = existingReaction.userIds.filter((id) => id !== user.id)
-        const updatedUserNames = existingReaction.userNames.filter((name) => name !== user.name)
-        
-        if (updatedUserIds.length === 0) {
-          return {
-            ...comment,
-            reactions: reactions.filter((r) => r.emoji !== emoji),
-          }
-        }
-        
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? { ...r, userIds: updatedUserIds, userNames: updatedUserNames }
-              : r
-          ),
-        }
-      } else {
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? {
-                  ...r,
-                  userIds: [...r.userIds, user.id],
-                  userNames: [...r.userNames, user.name],
-                }
-              : r
-          ),
-        }
-      }
-    } else {
-      return {
-        ...comment,
-        reactions: [
-          ...reactions,
-          {
-            emoji,
-            userIds: [user.id],
-            userNames: [user.name],
-          },
-        ],
-      }
-    }
-  }
-
-  const activeChatData = (chats || []).find((c) => c.id === activeChat)
+  const activeChatData = chats.find((c) => c.id === activeChat)
   const openPRs = (pullRequests || []).filter((pr) => pr.status === 'open')
   const mergedPRs = (pullRequests || []).filter((pr) => pr.status === 'merged')
-  const organization = getExistingOrganization()
-
-  const handleSelectChat = (chatId: string) => {
-    setActiveChat(chatId)
-    setShowDashboard(false)
-    if (isMobile) {
-      setChatListOpen(false)
-    }
-  }
-
-  const handleViewPR = (pr: PullRequest) => {
-    setSelectedPR(pr)
-    setPRDialogOpen(true)
-    setShowDashboard(false)
-    if (isMobile) {
-      setRightPanelOpen(false)
-    }
-  }
-
-  const handleGoHome = () => {
-    setActiveChat(null)
-    setShowDashboard(true)
-  }
+  const organization = getOrganization()
 
   if (isLoadingAuth) {
     return (
@@ -779,7 +286,7 @@ Important:
               <ChatList
                 chats={chats || []}
                 activeChat={activeChat}
-                onSelectChat={setActiveChat}
+                onSelectChat={handleSelectChat}
                 onNewChat={handleNewChat}
               />
             )}
@@ -807,7 +314,7 @@ Important:
                       key={message.id}
                       message={message}
                       user={currentUser || undefined}
-                      onTranslate={handleTranslateMessage}
+                      onTranslate={handleTranslateMessageWrapper}
                     />
                   ))}
                   {typingUsers.length > 0 && (
