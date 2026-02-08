@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { AuthForm } from '@/components/AuthForm'
 import { MomentumDashboard } from '@/components/MomentumDashboard'
 import { NewChatDialog } from '@/components/NewChatDialog'
@@ -35,7 +34,7 @@ import { useDecisions } from '@/hooks/use-decisions'
 function App() {
   const { currentUser, isAuthenticated, isLoadingAuth, handleSignIn, handleSignUp, handleSignOut } = useAuth()
   
-  const { chats, createChat, addMessage, addTranslation, getChatById, getOrganization } = useChats()
+  const { chats, isLoading: isLoadingChats, createChat, updateChat, deleteChat, refreshChats, addMessage, addTranslation, getChatById, getOrganization } = useChats()
   
   const {
     pullRequests,
@@ -51,18 +50,6 @@ function App() {
     getMergedPRs,
   } = usePullRequests()
 
-  const {
-    decisions,
-    isLoadingDecisions,
-    loadDecisions,
-    createDecision,
-    lockDecision,
-    unlockDecision,
-    getHistory,
-    getConflicts,
-    resolveConflict,
-  } = useDecisions()
-  
   const {
     pendingChanges,
     addChanges,
@@ -96,6 +83,20 @@ function App() {
     handleGoHome,
     handleNewChat,
   } = useUIState()
+
+  const {
+    decisions,
+    isLoadingDecisions,
+    loadDecisions,
+    createDecision,
+    voteOnOption,
+    changeStage,
+    lockDecision,
+    unlockDecision,
+    getHistory,
+    getConflicts,
+    resolveConflict,
+  } = useDecisions(activeChat)
   
   const { 
     activeUsers, 
@@ -106,7 +107,7 @@ function App() {
     broadcastEvent,
   } = useCollaboration(currentUser, activeChat)
 
-  const { handleSendMessage, handleTranslateMessage, handleTypingChange } = useChatActions(
+  const { handleSendMessage, handleTranslateMessage, handleTypingChange, handleDeleteChat, handleUpdateChat } = useChatActions(
     activeChat,
     currentUser,
     addMessage,
@@ -114,7 +115,9 @@ function App() {
     addChanges,
     setIsTyping,
     setTyping,
-    broadcastEvent
+    broadcastEvent,
+    deleteChat,
+    updateChat
   )
 
   const handleCreateChat = async (domain: string, service: string, feature: string, title: string) => {
@@ -188,35 +191,47 @@ function App() {
     await handleTranslateMessage(messageId)
   }
 
-  useEffect(() => {
-    if (!activeChat) return
-    loadDecisions(activeChat)
-  }, [activeChat, loadDecisions])
-
   const refreshDecisions = async () => {
     if (!activeChat) return
     await loadDecisions(activeChat)
   }
 
-  const handleCreateDecision = async (title: string, value: Record<string, any>) => {
+  const handleCreateDecision = async (
+    question: string,
+    options: string[],
+    decisionType: import('@/lib/types').DecisionType,
+    context?: string
+  ) => {
     if (!activeChat) return
-    await createDecision(activeChat, title, value)
-    await refreshDecisions()
+    await createDecision(activeChat, question, options, decisionType, context)
+  }
+
+  const handleVoteOnOption = async (
+    decision: import('@/lib/types').DecisionRecord,
+    optionId: string,
+    userId: string
+  ) => {
+    await voteOnOption(decision, optionId, userId)
+  }
+
+  const handleChangeStage = async (
+    decision: import('@/lib/types').DecisionRecord,
+    stage: import('@/lib/types').DecisionStage,
+    resolvedOptionId?: string
+  ) => {
+    await changeStage(decision, stage, resolvedOptionId)
   }
 
   const handleLockDecision = async (decisionId: string) => {
     await lockDecision(decisionId)
-    await refreshDecisions()
   }
 
   const handleUnlockDecision = async (decisionId: string) => {
     await unlockDecision(decisionId)
-    await refreshDecisions()
   }
 
   const handleResolveConflict = async (decisionId: string, conflictId: string, resolution: string) => {
     await resolveConflict(decisionId, conflictId, resolution)
-    await refreshDecisions()
   }
 
   const activeChatData = chats.find((c) => c.id === activeChat)
@@ -540,8 +555,11 @@ function App() {
                       activeChat={activeChat}
                       decisions={decisions}
                       isLoading={isLoadingDecisions}
+                      currentUserId={currentUser?.id}
                       onRefresh={refreshDecisions}
                       onCreateDecision={handleCreateDecision}
+                      onVoteOnOption={handleVoteOnOption}
+                      onChangeStage={handleChangeStage}
                       onLockDecision={handleLockDecision}
                       onUnlockDecision={handleUnlockDecision}
                       onGetHistory={getHistory}
@@ -714,8 +732,11 @@ function App() {
                   activeChat={activeChat}
                   decisions={decisions}
                   isLoading={isLoadingDecisions}
+                  currentUserId={currentUser?.id}
                   onRefresh={refreshDecisions}
                   onCreateDecision={handleCreateDecision}
+                  onVoteOnOption={handleVoteOnOption}
+                  onChangeStage={handleChangeStage}
                   onLockDecision={handleLockDecision}
                   onUnlockDecision={handleUnlockDecision}
                   onGetHistory={getHistory}

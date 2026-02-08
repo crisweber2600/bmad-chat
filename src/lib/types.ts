@@ -133,6 +133,25 @@ export interface CollaborationEvent {
   metadata?: Record<string, any>
 }
 
+export type DecisionStage = 'proposed' | 'active' | 'resolved'
+export type DecisionType = 'poll' | 'consensus' | 'authority'
+
+export interface DecisionOption {
+  id: string
+  label: string
+  votes: number
+  voters: string[]
+}
+
+export interface DecisionValue {
+  question: string
+  options: DecisionOption[]
+  decisionType: DecisionType
+  context?: string
+  stage: DecisionStage
+  resolvedOptionId?: string | null
+}
+
 export interface DecisionRecord {
   id: string
   chatId: string

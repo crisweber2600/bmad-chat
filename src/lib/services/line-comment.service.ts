@@ -1,7 +1,104 @@
-import { LineComment, User, EmojiReaction, FileChange, PullRequest } from '@/lib/types'
+import { apiRequest } from '@/lib/api'
+import { LineComment, User, EmojiReaction, FileChange } from '@/lib/types'
+
+// ---------------------------------------------------------------------------
+// API payload types (match backend DTOs)
+// ---------------------------------------------------------------------------
+
+export interface LineCommentListPayload {
+  pullRequestId: string
+  fileId: string
+  comments: LineComment[]
+  total: number
+}
+
+// ---------------------------------------------------------------------------
+// LineCommentService — API layer + local utilities for pending changes
+// ---------------------------------------------------------------------------
 
 export class LineCommentService {
-  static createLineComment(
+  // =========================================================================
+  // API methods — call backend /v1/pull-requests/:prId/... endpoints
+  // =========================================================================
+
+  /** GET /v1/pull-requests/:prId/files/:fileId/comments */
+  static async listComments(
+    prId: string,
+    fileId: string
+  ): Promise<LineCommentListPayload> {
+    return apiRequest<LineCommentListPayload>(
+      `/v1/pull-requests/${prId}/files/${encodeURIComponent(fileId)}/comments`
+    )
+  }
+
+  /** POST /v1/pull-requests/:prId/files/:fileId/comments */
+  static async createComment(
+    prId: string,
+    fileId: string,
+    data: {
+      lineNumber: number
+      lineType: 'addition' | 'deletion' | 'unchanged'
+      content: string
+      parentId?: string
+    }
+  ): Promise<LineComment> {
+    return apiRequest<LineComment>(
+      `/v1/pull-requests/${prId}/files/${encodeURIComponent(fileId)}/comments`,
+      { method: 'POST', body: data }
+    )
+  }
+
+  /** PATCH /v1/pull-requests/:prId/comments/:commentId */
+  static async editComment(
+    prId: string,
+    commentId: string,
+    content: string
+  ): Promise<LineComment> {
+    return apiRequest<LineComment>(
+      `/v1/pull-requests/${prId}/comments/${commentId}`,
+      { method: 'PATCH', body: { content } }
+    )
+  }
+
+  /** DELETE /v1/pull-requests/:prId/comments/:commentId */
+  static async deleteComment(
+    prId: string,
+    commentId: string
+  ): Promise<LineComment> {
+    return apiRequest<LineComment>(
+      `/v1/pull-requests/${prId}/comments/${commentId}`,
+      { method: 'DELETE' }
+    )
+  }
+
+  /** POST /v1/pull-requests/:prId/line-comments/:commentId/resolve */
+  static async resolveComment(
+    prId: string,
+    commentId: string
+  ): Promise<LineComment> {
+    return apiRequest<LineComment>(
+      `/v1/pull-requests/${prId}/line-comments/${commentId}/resolve`,
+      { method: 'POST', body: {} }
+    )
+  }
+
+  /** POST /v1/pull-requests/:prId/comments/:commentId/reactions */
+  static async toggleReaction(
+    prId: string,
+    commentId: string,
+    emoji: string
+  ): Promise<LineComment> {
+    return apiRequest<LineComment>(
+      `/v1/pull-requests/${prId}/comments/${commentId}/reactions`,
+      { method: 'POST', body: { emoji } }
+    )
+  }
+
+  // =========================================================================
+  // Local utilities — for pre-PR pending changes (no API calls)
+  // =========================================================================
+
+  static createLocalComment(
     fileId: string,
     lineNumber: number,
     lineType: 'addition' | 'deletion' | 'unchanged',
@@ -28,71 +125,6 @@ export class LineCommentService {
     return {
       ...comment,
       replies: [...(comment.replies || []), reply],
-    }
-  }
-
-  static resolveComment(comment: LineComment): LineComment {
-    return {
-      ...comment,
-      resolved: true,
-    }
-  }
-
-  static toggleReaction(
-    comment: LineComment,
-    emoji: string,
-    user: User
-  ): LineComment {
-    const reactions = comment.reactions || []
-    const existingReaction = reactions.find((r) => r.emoji === emoji)
-
-    if (existingReaction) {
-      const hasReacted = existingReaction.userIds.includes(user.id)
-      
-      if (hasReacted) {
-        const updatedUserIds = existingReaction.userIds.filter((id) => id !== user.id)
-        const updatedUserNames = existingReaction.userNames.filter((name) => name !== user.name)
-        
-        if (updatedUserIds.length === 0) {
-          return {
-            ...comment,
-            reactions: reactions.filter((r) => r.emoji !== emoji),
-          }
-        }
-        
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? { ...r, userIds: updatedUserIds, userNames: updatedUserNames }
-              : r
-          ),
-        }
-      } else {
-        return {
-          ...comment,
-          reactions: reactions.map((r) =>
-            r.emoji === emoji
-              ? {
-                  ...r,
-                  userIds: [...r.userIds, user.id],
-                  userNames: [...r.userNames, user.name],
-                }
-              : r
-          ),
-        }
-      }
-    } else {
-      const newReaction: EmojiReaction = {
-        emoji,
-        userIds: [user.id],
-        userNames: [user.name],
-      }
-      
-      return {
-        ...comment,
-        reactions: [...reactions, newReaction],
-      }
     }
   }
 
@@ -123,7 +155,7 @@ export class LineCommentService {
     return {
       ...file,
       lineComments: (file.lineComments || []).map((comment) =>
-        comment.id === commentId ? this.resolveComment(comment) : comment
+        comment.id === commentId ? { ...comment, resolved: true } : comment
       ),
     }
   }
@@ -136,7 +168,7 @@ export class LineCommentService {
   ): FileChange {
     const updateComment = (comment: LineComment): LineComment => {
       if (comment.id === commentId) {
-        return this.toggleReaction(comment, emoji, user)
+        return this.toggleReactionLocal(comment, emoji, user)
       }
       if (comment.replies) {
         return {
@@ -153,48 +185,63 @@ export class LineCommentService {
     }
   }
 
-  static addCommentToPR(
-    pr: PullRequest,
-    fileId: string,
+  private static toggleReactionLocal(
     comment: LineComment,
-    parentId?: string
-  ): PullRequest {
-    return {
-      ...pr,
-      fileChanges: pr.fileChanges.map((file) =>
-        file.path === fileId
-          ? this.addCommentToFile(file, comment, parentId)
-          : file
-      ),
-      updatedAt: Date.now(),
-    }
-  }
-
-  static resolveCommentInPR(
-    pr: PullRequest,
-    commentId: string
-  ): PullRequest {
-    return {
-      ...pr,
-      fileChanges: pr.fileChanges.map((file) =>
-        this.resolveCommentInFile(file, commentId)
-      ),
-      updatedAt: Date.now(),
-    }
-  }
-
-  static toggleReactionInPR(
-    pr: PullRequest,
-    commentId: string,
     emoji: string,
     user: User
-  ): PullRequest {
-    return {
-      ...pr,
-      fileChanges: pr.fileChanges.map((file) =>
-        this.toggleReactionInFile(file, commentId, emoji, user)
-      ),
-      updatedAt: Date.now(),
+  ): LineComment {
+    const reactions = comment.reactions || []
+    const existingReaction = reactions.find((r) => r.emoji === emoji)
+
+    if (existingReaction) {
+      const hasReacted = existingReaction.userIds.includes(user.id)
+
+      if (hasReacted) {
+        const updatedUserIds = existingReaction.userIds.filter((id) => id !== user.id)
+        const updatedUserNames = existingReaction.userNames.filter(
+          (name) => name !== user.name
+        )
+
+        if (updatedUserIds.length === 0) {
+          return {
+            ...comment,
+            reactions: reactions.filter((r) => r.emoji !== emoji),
+          }
+        }
+
+        return {
+          ...comment,
+          reactions: reactions.map((r) =>
+            r.emoji === emoji
+              ? { ...r, userIds: updatedUserIds, userNames: updatedUserNames }
+              : r
+          ),
+        }
+      } else {
+        return {
+          ...comment,
+          reactions: reactions.map((r) =>
+            r.emoji === emoji
+              ? {
+                  ...r,
+                  userIds: [...r.userIds, user.id],
+                  userNames: [...r.userNames, user.name],
+                }
+              : r
+          ),
+        }
+      }
+    } else {
+      const newReaction: EmojiReaction = {
+        emoji,
+        userIds: [user.id],
+        userNames: [user.name],
+      }
+
+      return {
+        ...comment,
+        reactions: [...reactions, newReaction],
+      }
     }
   }
 }

@@ -1,41 +1,38 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Chat, FileChange, Message, MessageTranslation, User } from '@/lib/types'
-import { apiRequest } from '@/lib/api'
+import { ChatService, SendMessagePayload, TranslatePayload } from '@/lib/services/chat.service'
 import { toast } from 'sonner'
-
-interface ChatListPayload {
-  chats: Chat[]
-  total: number
-  limit: number
-  offset: number
-}
-
-interface SendMessagePayload {
-  userMessage: Message
-  aiMessage: Message
-  routingAssessment: string
-  momentumIndicator: string
-}
-
-interface TranslatePayload {
-  translation: MessageTranslation
-}
 
 export function useChats() {
   const [chats, setChats] = useState<Chat[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const loadedRef = useRef(false)
+
+  // ── Fetch chats on mount ──────────────────────────────────────────────
+
+  const refreshChats = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const payload = await ChatService.listChats()
+      setChats(payload.chats || [])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load chats'
+      setError(msg)
+      console.error('Failed to load chats:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    const loadChats = async () => {
-      try {
-        const payload = await apiRequest<ChatListPayload>('/v1/chats')
-        setChats(payload.chats || [])
-      } catch (error) {
-        console.error('Failed to load chats:', error)
-      }
-    }
+    if (loadedRef.current) return
+    loadedRef.current = true
+    refreshChats()
+  }, [refreshChats])
 
-    loadChats()
-  }, [])
+  // ── Create chat (optimistic) ──────────────────────────────────────────
 
   const createChat = async (
     domain: string,
@@ -43,14 +40,66 @@ export function useChats() {
     feature: string,
     title: string
   ): Promise<Chat> => {
-    const newChat = await apiRequest<Chat>('/v1/chats', {
-      method: 'POST',
-      body: { domain, service, feature, title },
-    })
-
-    setChats((current) => [newChat, ...current])
-    return newChat
+    try {
+      const newChat = await ChatService.createChat({ title, domain, service, feature })
+      setChats((current) => [newChat, ...current])
+      return newChat
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create chat')
+      throw err
+    }
   }
+
+  // ── Update chat (optimistic + rollback) ───────────────────────────────
+
+  const updateChat = async (
+    chatId: string,
+    data: { title?: string; domain?: string; service?: string; feature?: string }
+  ): Promise<Chat> => {
+    const previous = chats
+
+    // Optimistic update
+    setChats((current) =>
+      current.map((chat) =>
+        chat.id === chatId ? { ...chat, ...data, updatedAt: Date.now() } : chat
+      )
+    )
+
+    try {
+      const updated = await ChatService.updateChat(chatId, data)
+      // Replace optimistic version with server version
+      setChats((current) =>
+        current.map((chat) => (chat.id === chatId ? { ...chat, ...updated } : chat))
+      )
+      return updated
+    } catch (err) {
+      // Rollback
+      setChats(previous)
+      toast.error(err instanceof Error ? err.message : 'Failed to update chat')
+      throw err
+    }
+  }
+
+  // ── Delete chat (optimistic + rollback) ───────────────────────────────
+
+  const deleteChat = async (chatId: string): Promise<void> => {
+    const previous = chats
+
+    // Optimistic removal
+    setChats((current) => current.filter((chat) => chat.id !== chatId))
+
+    try {
+      await ChatService.deleteChat(chatId)
+      toast.success('Chat deleted')
+    } catch (err) {
+      // Rollback
+      setChats(previous)
+      toast.error(err instanceof Error ? err.message : 'Failed to delete chat')
+      throw err
+    }
+  }
+
+  // ── Add message locally (used after API response) ─────────────────────
 
   const addMessage = (chatId: string, message: Message) => {
     setChats((current) =>
@@ -72,6 +121,8 @@ export function useChats() {
       })
     )
   }
+
+  // ── Add translation locally ───────────────────────────────────────────
 
   const addTranslation = (
     chatId: string,
@@ -98,38 +149,33 @@ export function useChats() {
     )
   }
 
+  // ── Lookups ───────────────────────────────────────────────────────────
+
   const getChatById = (chatId: string | null): Chat | undefined => {
     if (!chatId) return undefined
     return chats.find((chat) => chat.id === chatId)
   }
 
   const getOrganization = () => {
-    const domains = new Set<string>()
-    const services = new Set<string>()
-    const features = new Set<string>()
-
-    chats.forEach((chat) => {
-      if (chat.domain) domains.add(chat.domain)
-      if (chat.service) services.add(chat.service)
-      if (chat.feature) features.add(chat.feature)
-    })
-
-    return {
-      domains: Array.from(domains),
-      services: Array.from(services),
-      features: Array.from(features),
-    }
+    return ChatService.extractOrganization(chats)
   }
 
   return {
     chats,
+    isLoading,
+    error,
     createChat,
+    updateChat,
+    deleteChat,
+    refreshChats,
     addMessage,
     addTranslation,
     getChatById,
     getOrganization,
   }
 }
+
+// ── Standalone async helpers (used by useChatActions) ─────────────────────
 
 export async function sendMessage(
   content: string,
@@ -144,13 +190,7 @@ export async function sendMessage(
   onTypingChange(true)
 
   try {
-    const payload = await apiRequest<SendMessagePayload>(`/v1/chats/${chatId}/messages`, {
-      method: 'POST',
-      body: {
-        content,
-        personaOverride: currentUser.role,
-      },
-    })
+    const payload = await ChatService.sendMessage(chatId, content, currentUser.role)
 
     onMessageCreated(payload.userMessage)
     onAIResponse(payload.aiMessage, payload.aiMessage.fileChanges || [])
@@ -177,12 +217,7 @@ export async function translateMessage(
   onTranslationComplete: (messageId: string, translation: MessageTranslation) => void
 ) {
   try {
-    const payload = await apiRequest<TranslatePayload>(`/v1/chats/${chatId}/messages/${messageId}/translate`, {
-      method: 'POST',
-      body: {
-        role: currentUser.role,
-      },
-    })
+    const payload = await ChatService.translateMessage(chatId, messageId, currentUser.role)
 
     onTranslationComplete(messageId, payload.translation)
 

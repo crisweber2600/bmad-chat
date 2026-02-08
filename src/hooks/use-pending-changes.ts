@@ -22,7 +22,7 @@ export function usePendingChanges() {
     currentUser: User,
     parentId?: string
   ) => {
-    const comment = LineCommentService.createLineComment(
+    const comment = LineCommentService.createLocalComment(
       fileId,
       lineNumber,
       lineType,
