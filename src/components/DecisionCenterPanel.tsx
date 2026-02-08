@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -644,7 +644,7 @@ export function DecisionCenterPanel({
   activeChat,
   decisions,
   isLoading,
-  currentUserId = 'current-user',
+  currentUserId,
   onRefresh,
   onCreateDecision,
   onVoteOnOption,
@@ -655,6 +655,17 @@ export function DecisionCenterPanel({
   onGetConflicts,
   onResolveConflict,
 }: DecisionCenterPanelProps) {
+  // Warn once if currentUserId is missing or a placeholder
+  useEffect(() => {
+    if (!currentUserId || currentUserId === 'current-user') {
+      console.warn(
+        '[DecisionCenterPanel] currentUserId is missing or set to placeholder — votes will not be recorded correctly'
+      )
+    }
+  }, [currentUserId])
+
+  const safeUserId = currentUserId || 'anonymous'
+
   const [selectedDecisionId, setSelectedDecisionId] = useState<string | null>(
     null
   )
@@ -759,9 +770,9 @@ export function DecisionCenterPanel({
             <div key={decision.id}>
               <DecisionCard
                 decision={decision}
-                currentUserId={currentUserId}
+                currentUserId={safeUserId}
                 onVote={(optionId) =>
-                  onVoteOnOption(decision, optionId, currentUserId)
+                  onVoteOnOption(decision, optionId, safeUserId)
                 }
                 onChangeStage={(stage, resolvedOptionId) =>
                   onChangeStage(decision, stage, resolvedOptionId)

@@ -71,13 +71,14 @@ interface ApiRequestOptions {
   body?: unknown
   headers?: Record<string, string>
   requireAuth?: boolean
+  signal?: AbortSignal
 }
 
 export async function apiRequest<T>(
   path: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
-  const { method = 'GET', body, headers = {}, requireAuth = true } = options
+  const { method = 'GET', body, headers = {}, requireAuth = true, signal } = options
   const token = getAccessToken()
   const requestHeaders: HeadersInit = {
     'Content-Type': 'application/json',
@@ -92,6 +93,7 @@ export async function apiRequest<T>(
     method,
     headers: requestHeaders,
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   })
 
   let payload: ResponseEnvelope<T> | null = null

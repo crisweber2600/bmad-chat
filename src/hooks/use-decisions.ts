@@ -10,42 +10,98 @@ import {
 import { toast } from 'sonner'
 
 const POLL_INTERVAL_MS = 7_000
+const MAX_CONSECUTIVE_FAILURES = 3
 
 export function useDecisions(chatId?: string | null) {
   const [decisions, setDecisions] = useState<DecisionRecord[]>([])
   const [isLoadingDecisions, setIsLoadingDecisions] = useState(false)
+
+  // Refs to avoid stale closures in intervals/async callbacks
+  const chatIdRef = useRef(chatId)
+  chatIdRef.current = chatId
+
+  const abortRef = useRef<AbortController | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const consecutiveFailuresRef = useRef(0)
+  const initialLoadDoneRef = useRef(false)
 
   const loadDecisions = useCallback(async (targetChatId?: string) => {
-    const id = targetChatId ?? chatId
+    const id = targetChatId ?? chatIdRef.current
     if (!id) return
+
+    // Abort any in-flight request
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setIsLoadingDecisions(true)
     try {
-      const payload = await DecisionService.listDecisions(id)
+      const payload = await DecisionService.listDecisions(id, { signal: controller.signal })
       setDecisions(payload.decisions || [])
-    } catch (error) {
+      consecutiveFailuresRef.current = 0
+    } catch (error: any) {
+      if (error?.name === 'AbortError') return
       console.error('Failed to load decisions:', error)
       setDecisions([])
     } finally {
       setIsLoadingDecisions(false)
     }
-  }, [chatId])
+  }, [])
 
   // Polling: auto-refresh decisions while chatId is set
   useEffect(() => {
     if (!chatId) return
-    loadDecisions(chatId)
 
-    pollRef.current = setInterval(() => {
-      DecisionService.listDecisions(chatId)
-        .then((payload) => setDecisions(payload.decisions || []))
-        .catch(() => {/* silent poll failure */})
+    const controller = new AbortController()
+    abortRef.current = controller
+    consecutiveFailuresRef.current = 0
+    initialLoadDoneRef.current = false
+
+    // Initial load
+    const doInitialLoad = async () => {
+      setIsLoadingDecisions(true)
+      try {
+        const payload = await DecisionService.listDecisions(chatId, { signal: controller.signal })
+        setDecisions(payload.decisions || [])
+        consecutiveFailuresRef.current = 0
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return
+        console.error('Failed to load decisions:', error)
+        setDecisions([])
+      } finally {
+        setIsLoadingDecisions(false)
+        initialLoadDoneRef.current = true
+      }
+    }
+
+    doInitialLoad()
+
+    // Poll (first tick is delayed — no double-fetch)
+    pollRef.current = setInterval(async () => {
+      const currentId = chatIdRef.current
+      if (!currentId || !initialLoadDoneRef.current) return
+
+      try {
+        const payload = await DecisionService.listDecisions(currentId, { signal: controller.signal })
+        setDecisions(payload.decisions || [])
+        consecutiveFailuresRef.current = 0
+      } catch (error: any) {
+        if (error?.name === 'AbortError') return
+        consecutiveFailuresRef.current += 1
+        if (consecutiveFailuresRef.current >= MAX_CONSECUTIVE_FAILURES) {
+          toast.warning('Decision polling is failing — you may be seeing stale data')
+          consecutiveFailuresRef.current = 0 // Reset so we don't spam toasts
+        }
+      }
     }, POLL_INTERVAL_MS)
 
     return () => {
+      controller.abort()
       if (pollRef.current) clearInterval(pollRef.current)
+      pollRef.current = null
+      abortRef.current = null
     }
-  }, [chatId, loadDecisions])
+  }, [chatId])
 
   const createDecision = async (
     targetChatId: string,
